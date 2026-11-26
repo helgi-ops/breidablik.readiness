@@ -93,7 +93,7 @@ export async function GET(req: Request) {
     // Get all active players (clients) on this team
     const { data: players, error: playersErr } = await sb
       .from("players")
-      .select("id, full_name, user_id, position, sport, is_active, status, created_at, uses_wellness_features")
+      .select("id, full_name, user_id, position, sport, is_active, status, created_at, uses_wellness_features, is_demo")
       .eq("team_id", ctx.teamId)
       .eq("is_active", true)
       .order("full_name");
@@ -228,6 +228,8 @@ export async function GET(req: Request) {
         id: p.id,
         name: p.full_name,
         hasAccount: !!p.user_id,
+        // Seeded example client (players.is_demo): shown with a "Demo" badge, never counted.
+        isDemo: p.is_demo === true,
         position: p.position,
         // Check-in-off client: never surface readiness as the client's state —
         // load (ACWR / sRPE) is the signal instead.

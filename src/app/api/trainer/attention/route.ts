@@ -95,9 +95,9 @@ export async function GET(req: Request) {
   const teamWellness = (await getTeamMode(sb, teamId)).usesWellnessFeatures;
 
   const { data: players } = await sb
-    .from("players").select("id, full_name, user_id, uses_wellness_features")
+    .from("players").select("id, full_name, user_id, uses_wellness_features, is_demo")
     .eq("team_id", teamId).eq("is_active", true).order("full_name");
-  const list = ((players ?? []) as Array<{ id: string; full_name: string; user_id: string | null; uses_wellness_features: boolean | null }>).slice(0, 50);
+  const list = ((players ?? []) as Array<{ id: string; full_name: string; user_id: string | null; uses_wellness_features: boolean | null; is_demo: boolean | null }>).slice(0, 50);
   const today = new Date().toISOString().slice(0, 10);
 
   // Clients on a declared vacation are excluded — no false "missed check-in".
@@ -243,7 +243,7 @@ export async function GET(req: Request) {
     }
 
     const topSeverity = flags.reduce((m, f) => Math.max(m, f.severity), 0);
-    return { id: p.id, name: p.full_name, flags: flags.slice(0, 4), topSeverity };
+    return { id: p.id, name: p.full_name, isDemo: p.is_demo === true, flags: flags.slice(0, 4), topSeverity };
   }));
 
   const clients = results

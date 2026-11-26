@@ -16,6 +16,7 @@ import VbtMethodPicker from "./VbtMethodPicker";
 import { LiftRxDetails } from "./LiftRxTable";
 import { ptInputFromPlanExercise, rxForPtLift } from "@/lib/micropulse/strengthProgramming/ptLiftRx";
 import type { VbtDraft } from "@/lib/micropulse/vbtMethods";
+import { resizePlanWeeks, resizePerWeek } from "@/lib/trainer/planGrid";
 
 /* ── Types ───────────────────────────────────────────── */
 
@@ -743,6 +744,31 @@ export default function PlanBuilder({
     setWeeks(newWeeks);
   }
 
+  /* ── Weeks / sessions-per-week inputs reshape the grid ── */
+
+  const blankSession = (d: number): Session => ({
+    dayOfWeek: d,
+    name: `${isIS ? "Seta" : "Session"} ${d}`,
+    type: planType,
+    method: "straight",
+    bodySplit: "full",
+    groups: [],
+  });
+
+  function changeDuration(n: number) {
+    setDurationWeeks(n);
+    if (weeks.length === 0) return; // the first build happens on open
+    setWeeks(resizePlanWeeks(weeks, n, sessionsPerWeek, blankSession));
+    setDeloadPercentages((prev) => resizePerWeek(prev, n, 10));
+    setRecoveryPercentages((prev) => resizePerWeek(prev, n, 20));
+  }
+
+  function changeSessionsPerWeek(n: number) {
+    setSessionsPerWeek(n);
+    if (weeks.length === 0) return;
+    setWeeks(resizePlanWeeks(weeks, durationWeeks, n, blankSession));
+  }
+
   /* ── Copy week ──────────────────────────────────────– */
 
   function copyWeek(weekIdx: number) {
@@ -903,7 +929,7 @@ export default function PlanBuilder({
                 max="12"
                 value={durationWeeks}
                 onChange={(e) =>
-                  setDurationWeeks(Math.max(1, Math.min(12, +e.target.value)))
+                  changeDuration(Math.max(1, Math.min(12, +e.target.value || 1)))
                 }
                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
               />
@@ -919,8 +945,8 @@ export default function PlanBuilder({
                 max="6"
                 value={sessionsPerWeek}
                 onChange={(e) =>
-                  setSessionsPerWeek(
-                    Math.max(1, Math.min(6, +e.target.value))
+                  changeSessionsPerWeek(
+                    Math.max(1, Math.min(6, +e.target.value || 1))
                   )
                 }
                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"

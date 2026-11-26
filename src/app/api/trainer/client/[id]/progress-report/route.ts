@@ -9,9 +9,7 @@
 
 import { NextResponse } from "next/server";
 import { getSupabaseServer as getAdmin } from "@/lib/supabaseServer";
-import { computePersonalRecords } from "@/lib/client/personalRecords";
-import { computeVolumeLoad } from "@/lib/client/volumeLoad";
-import { computeTrainingLoad } from "@/lib/client/trainingLoad";
+import { buildClientProgressReport } from "@/lib/trainer/clientProgressReport";
 
 export const runtime = "nodejs";
 
@@ -52,61 +50,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   const sb = a.sb;
 
   const WEEKS = 4;
-  const start = isoDaysAgo(WEEKS * 7 - 1);
-  const end = isoDaysAgo(0);
-
-  const { data: player } = await sb.from("players").select("full_name, position").eq("id", clientId).maybeSingle();
-  const clientName = ((player as { full_name?: string | null } | null)?.full_name ?? "—").trim();
-
-  // ── Adherence (individual_training_log over the period) ──
-  const { data: logs } = await sb
-    .from("individual_training_log")
-    .select("completed, skipped, log_date")
-    .eq("player_id", clientId)
-    .gte("log_date", start)
-    .lte("log_date", end);
-  const logRows = (logs ?? []) as Array<{ completed: boolean | null; skipped: boolean | null }>;
-  const completed = logRows.filter((r) => r.completed).length;
-  const skipped = logRows.filter((r) => r.skipped).length;
-  const totalLogged = completed + skipped;
-  const adherence = { completed, skipped, total: totalLogged, pct: totalLogged > 0 ? Math.round((completed / totalLogged) * 100) : null };
-
-  // ── Readiness trend (readiness_entries over the period) ──
-  const { data: rd } = await sb
-    .from("readiness_entries")
-    .select("entry_date, total_score, color")
-    .eq("player_id", clientId)
-    .gte("entry_date", start)
-    .lte("entry_date", end)
-    .order("entry_date", { ascending: true });
-  const rdRows = (rd ?? []) as Array<{ entry_date: string; total_score: number | null; color: string | null }>;
-  const scores = rdRows.map((r) => r.total_score).filter((s): s is number => typeof s === "number");
-  const col = (c: string | null) => String(c ?? "").toUpperCase();
-  const readiness = {
-    checkIns: rdRows.length,
-    avgScore: scores.length ? Math.round((scores.reduce((s, x) => s + x, 0) / scores.length) * 10) / 10 : null,
-    green: rdRows.filter((r) => col(r.color) === "GREEN").length,
-    yellow: rdRows.filter((r) => col(r.color) === "YELLOW").length,
-    red: rdRows.filter((r) => col(r.color) === "RED").length,
-    series: rdRows.map((r) => ({ date: r.entry_date, score: r.total_score, color: col(r.color) })),
-  };
-
-  // ── Strength PRs, volume and internal load (existing engines) ──
-  const [prs, volume, training] = await Promise.all([
-    computePersonalRecords(sb, clientId),
-    computeVolumeLoad(sb, clientId),
-    computeTrainingLoad(sb, clientId),
-  ]);
-
-  return NextResponse.json({
-    ok: true,
-    client: { id: clientId, name: clientName },
-    period: { start, end, weeks: WEEKS },
-    adherence,
-    readiness,
-    strength: prs,
-    volume,
-    training,
-    generatedAt: new Date().toISOString(),
-  });
+  const period = { start: isoDaysAgo(WEEKS * 7 - 1), end: isoDaysAgo(0), weeks: WEEKS };
+  const report = await buildClientProgressReport(sb, clientId, period);
+  return NextResponse.json({ ok: true, ...report });
 }

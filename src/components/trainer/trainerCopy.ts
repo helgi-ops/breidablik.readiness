@@ -42,6 +42,10 @@ export const TRAINER_COPY = {
       revoke: "Afturkalla",
       copyLink: "Afrita tengil",
       linkCopied: "Tengill afritaður",
+      resend: "Senda aftur",
+      emailed: "Boð sent á",
+      notEmailed: "Pósturinn fór ekki. Afritaðu tengilinn og sendu viðskiptavininum hann:",
+      resent: "Sent aftur",
     },
     plan: {
       strength: "Styrktarþjálfun",
@@ -151,6 +155,10 @@ export const TRAINER_COPY = {
       revoke: "Revoke",
       copyLink: "Copy link",
       linkCopied: "Link copied",
+      resend: "Resend",
+      emailed: "Invitation emailed to",
+      notEmailed: "The email didn't go out. Copy the link and send it to your client:",
+      resent: "Sent again",
     },
     plan: {
       strength: "Strength",

@@ -30,6 +30,8 @@ import ClientCheckinControl from "./ClientCheckinControl";
 import CorrectiveAdherence from "./CorrectiveAdherence";
 import ClientCorrectiveControl from "./ClientCorrectiveControl";
 import TrainerAttentionList, { isCardFlag, type AttentionClient } from "./TrainerAttentionList";
+import OnboardingChecklist from "./OnboardingChecklist";
+import { clientDisplayName, realClients } from "@/lib/trainer/demoClient";
 
 /* ── Types ───────────────────────────────────────────── */
 
@@ -73,6 +75,8 @@ interface Client {
   id: string;
   name: string;
   hasAccount: boolean;
+  /** The seeded example client: badged "Demo", never counted. */
+  isDemo?: boolean;
   position: string | null;
   /** Per-client effective mode: true = check-in off (load-only) for this client. */
   gpsOnly: boolean;
@@ -166,6 +170,9 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
     return () => window.removeEventListener("popstate", sync);
   }, []);
   const [clients, setClients] = useState<Client[]>([]);
+  // ?welcome=pt — a brand-new practice straight from /signup/trainer.
+  const [welcome] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("welcome") === "pt");
+  const [removingDemo, setRemovingDemo] = useState(false);
   // Practice-wide check-in default (team_settings; PT practices default off).
   // Per client it can be overridden — each client carries its own `gpsOnly`.
   // This value only feeds the per-client control's "Team default" label.
@@ -192,6 +199,10 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
   const [inviteName, setInviteName] = useState("");
   const [inviteSending, setInviteSending] = useState(false);
   const [inviteMsg, setInviteMsg] = useState("");
+  // Link to show when the invitation email didn't go out (so the trainer can copy it).
+  const [inviteFallbackUrl, setInviteFallbackUrl] = useState<string | null>(null);
+  const [resending, setResending] = useState<string | null>(null);
+  const [resentId, setResentId] = useState<string | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
   // Plans modal
@@ -388,6 +399,7 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
     if (!inviteEmail.includes("@")) return;
     setInviteSending(true);
     setInviteMsg("");
+    setInviteFallbackUrl(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) return;
@@ -401,14 +413,21 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
         body: JSON.stringify({
           clientEmail: inviteEmail,
           clientName: inviteName || undefined,
+          lang,
         }),
       });
 
       const json = await res.json();
       if (res.ok) {
+        const sentTo = inviteEmail.trim();
         setInviteEmail("");
         setInviteName("");
-        setInviteMsg(json.signupUrl ? `✓ ${ct.invitations.copyLink}: ${json.signupUrl}` : "✓");
+        if (json.emailed) {
+          setInviteMsg(`✓ ${ct.invitations.emailed} ${sentTo}`);
+        } else {
+          setInviteMsg(ct.invitations.notEmailed);
+          setInviteFallbackUrl(json.signupUrl ?? null);
+        }
         fetchInvitations();
       } else {
         setInviteMsg(json.error || "Error");
@@ -433,14 +452,65 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
     fetchInvitations();
   }
 
+  /* ── Resend invitation (also revives an expired one) ─── */
+
+  async function resendInvite(id: string) {
+    setResending(id);
+    setInviteMsg("");
+    setInviteFallbackUrl(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const res = await fetch(`/api/trainer/invitations?id=${id}&team_id=${encodeURIComponent(teamId)}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ lang }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) { setInviteMsg(json.error || "Error"); return; }
+      if (json.emailed) {
+        setResentId(id);
+        setTimeout(() => setResentId(null), 2500);
+      } else {
+        setInviteMsg(ct.invitations.notEmailed);
+        setInviteFallbackUrl(json.signupUrl ?? null);
+      }
+      fetchInvitations();
+    } catch {
+      setInviteMsg("Error");
+    } finally {
+      setResending(null);
+    }
+  }
+
   /* ── Copy link ──────────────────────────────────────── */
 
   function copySignupLink(token: string) {
     const baseUrl = window.location.origin;
-    const url = `${baseUrl}/signup?invite=${token}&team_id=${teamId}`;
-    navigator.clipboard.writeText(url);
+    const url = `${baseUrl}/invite/client/${token}`;
+    navigator.clipboard.writeText(url).catch(() => {});
     setCopiedToken(token);
     setTimeout(() => setCopiedToken(null), 2000);
+  }
+
+  /* ── Demo client ────────────────────────────────────── */
+
+  async function removeDemoClient() {
+    setRemovingDemo(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const res = await fetch(`/api/trainer/demo-client${qs}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (res.ok) {
+        setSelectedClient(null);
+        await fetchClients();
+      }
+    } finally {
+      setRemovingDemo(false);
+    }
   }
 
   /* ── Readiness zone helpers ─────────────────────────── */
@@ -541,25 +611,47 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
       {/* ── Clients tab ───────────────────────────────── */}
       {tab === "clients" && (
         <>
+          {/* New practice: the 3-step getting-started checklist (hidden once done). */}
+          <OnboardingChecklist
+            teamId={teamId}
+            lang={isIS ? "IS" : "EN"}
+            welcome={welcome}
+            onChanged={() => { void fetchClients(); void fetchInvitations(); void fetchAssignments(); }}
+            onOpenTab={(t) => setTab(t)}
+          />
+
           {/* Layer 0 + 1: one verdict, then the plain facts behind it. */}
           {(() => {
-            const needIds = new Set(attention.filter((a) => a.flags.some((f) => isCardFlag(f.code))).map((a) => a.id));
-            const active = clients.filter((c) => c.hasAccount && !c.onBreak);
+            // The demo client is shown but never counted (verdict, facts, filters).
+            const real = realClients(clients);
+            const realAttention = realClients(attention);
+            const needIds = new Set(realAttention.filter((a) => a.flags.some((f) => isCardFlag(f.code))).map((a) => a.id));
+            const active = real.filter((c) => c.hasAccount && !c.onBreak);
             const checkinClients = active.filter((c) => !c.gpsOnly);
-            const anyCheckin = clients.some((c) => !c.gpsOnly);
-            const allCheckin = clients.length > 0 && clients.every((c) => !c.gpsOnly);
-            const dayScope = attention.some((a) => a.flags.some((f) => f.code === "readiness_red"));
+            const anyCheckin = real.some((c) => !c.gpsOnly);
+            const allCheckin = real.length > 0 && real.every((c) => !c.gpsOnly);
+            const dayScope = realAttention.some((a) => a.flags.some((f) => f.code === "readiness_red"));
             const trainedRecently = active.filter((c) => c.daysSinceLastSession != null && c.daysSinceLastSession <= 2).length;
-            const finished = clients.filter((c) => c.todayCompletion && c.todayCompletion.total > 0 && c.todayCompletion.completed === c.todayCompletion.total).length;
-            const underWay = clients.filter((c) => c.todayCompletion && c.todayCompletion.completed > 0 && c.todayCompletion.completed < c.todayCompletion.total).length;
-            const noPlan = clients.filter((c) => !c.plan).length;
+            const finished = real.filter((c) => c.todayCompletion && c.todayCompletion.total > 0 && c.todayCompletion.completed === c.todayCompletion.total).length;
+            const underWay = real.filter((c) => c.todayCompletion && c.todayCompletion.completed > 0 && c.todayCompletion.completed < c.todayCompletion.total).length;
+            const noPlan = real.filter((c) => !c.plan).length;
             const n = needIds.size;
-            const verdict = n === 0
+            const hasDemo = clients.some((c) => c.isDemo);
+            const verdict = real.length === 0
+              ? (isIS ? "Bjóddu fyrsta viðskiptavininum til að byrja." : "Invite your first client to get started.")
+              : n === 0
               ? (isIS ? "Allir skjólstæðingar eru á réttri leið." : "All clients are on track.")
               : isIS
                 ? `${n} ${n === 1 ? "skjólstæðingur þarf" : "skjólstæðingar þurfa"} á þér að halda ${dayScope ? "í dag" : "í vikunni"}.`
                 : `${n} ${n === 1 ? "client needs" : "clients need"} you ${dayScope ? "today" : "this week"}.`;
-            const facts = [
+            const facts = real.length === 0
+              ? [
+                  isIS ? "Engir viðskiptavinir enn" : "No clients yet",
+                  hasDemo
+                    ? (isIS ? "Sýnisviðskiptavinurinn sýnir hvað þú sérð þegar viðskiptavinir æfa" : "The demo client shows what you'll see once clients train")
+                    : (isIS ? "Boðshlekkur er tilbúinn á einni mínútu" : "An invite link takes a minute"),
+                ]
+              : [
               anyCheckin
                 ? (isIS
                     ? `${checkinClients.filter((c) => c.checkedInToday).length} af ${checkinClients.length} check-in komin`
@@ -593,7 +685,7 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                     {allCheckin
                       ? (isIS ? "Check-in er virkt hjá öllum" : "Check-in is on for everyone")
                       : anyCheckin
-                        ? (isIS ? `Check-in virkt hjá ${clients.filter((c) => !c.gpsOnly).length}` : `Check-in on for ${clients.filter((c) => !c.gpsOnly).length} clients`)
+                        ? (isIS ? `Check-in virkt hjá ${real.filter((c) => !c.gpsOnly).length}` : `Check-in on for ${real.filter((c) => !c.gpsOnly).length} clients`)
                         : (isIS ? "Check-in er slökkt" : "Check-in is off for this practice")}
                   </Link>
                 </div>
@@ -630,14 +722,15 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
               </button>
             </div>
           ) : (() => {
-            const needIds = new Set(attention.filter((a) => a.flags.some((f) => isCardFlag(f.code))).map((a) => a.id));
+            const needIds = new Set(realClients(attention).filter((a) => a.flags.some((f) => isCardFlag(f.code))).map((a) => a.id));
+            const real = realClients(clients);
             const noteById = new Map(attention.map((a) => [a.id, a.flags.filter((f) => !isCardFlag(f.code))]));
             const showCheckin = clients.some((c) => !c.gpsOnly);
             const filters: ["all" | "need" | "noplan" | "break", string, number][] = [
-              ["all", isIS ? "Allir" : "All", clients.length],
+              ["all", isIS ? "Allir" : "All", real.length],
               ["need", isIS ? "Þarf athygli" : "Needs you", needIds.size],
-              ["noplan", isIS ? "Án prógramms" : "No programme", clients.filter((c) => !c.plan).length],
-              ["break", isIS ? "Í pásu" : "On break", clients.filter((c) => c.onBreak).length],
+              ["noplan", isIS ? "Án prógramms" : "No programme", real.filter((c) => !c.plan).length],
+              ["break", isIS ? "Í pásu" : "On break", real.filter((c) => c.onBreak).length],
             ];
             const rank = (c: Client) => {
               const i = attention.findIndex((a) => a.id === c.id && needIds.has(a.id));
@@ -645,9 +738,9 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
             };
             const visible = clients
               .filter((c) => clientFilter === "all"
-                || (clientFilter === "need" && needIds.has(c.id))
-                || (clientFilter === "noplan" && !c.plan)
-                || (clientFilter === "break" && c.onBreak))
+                || (!c.isDemo && clientFilter === "need" && needIds.has(c.id))
+                || (!c.isDemo && clientFilter === "noplan" && !c.plan)
+                || (!c.isDemo && clientFilter === "break" && c.onBreak))
               .sort((x, y) => rank(x) - rank(y));
             return (
             <section aria-labelledby="clients-heading">
@@ -696,7 +789,12 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                 >
                   <div className="flex items-center gap-4">
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-semibold text-slate-900">{client.name || "—"}</div>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="truncate text-sm font-semibold text-slate-900">{clientDisplayName(client, isIS ? "IS" : "EN")}</span>
+                        {client.isDemo && (
+                          <span className="shrink-0 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-700">Demo</span>
+                        )}
+                      </div>
                       {notes.length > 0 && (
                         <div className="truncate text-xs text-amber-800">{notes.map((f) => f.why[isIS ? "IS" : "EN"]).join(" · ")}</div>
                       )}
@@ -934,7 +1032,23 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
 
                       {/* Danger zone — always visible regardless of sub-tab */}
                       <div className="mt-4 pt-3 border-t">
-                        <RemoveClientButton clientId={client.id} clientName={client.name} lang={isIS ? "IS" : "EN"} onRemoved={fetchClients} />
+                        {client.isDemo ? (
+                          <div className="flex flex-wrap items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={removeDemoClient}
+                              disabled={removingDemo}
+                              className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                            >
+                              {removingDemo ? (isIS ? "Eyði…" : "Deleting…") : (isIS ? "Eyða sýnisviðskiptavini" : "Delete demo client")}
+                            </button>
+                            <span className="text-xs text-slate-500">
+                              {isIS ? "Sýnisgögn eingöngu. Engum raunverulegum gögnum er eytt." : "Example data only. No real client data is touched."}
+                            </span>
+                          </div>
+                        ) : (
+                          <RemoveClientButton clientId={client.id} clientName={client.name} lang={isIS ? "IS" : "EN"} onRemoved={fetchClients} />
+                        )}
                       </div>
                     </div>
                   )}
@@ -981,6 +1095,22 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
             {inviteMsg && (
               <p className="mt-2 text-sm text-gray-600 break-all">{inviteMsg}</p>
             )}
+            {inviteFallbackUrl && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <code className="min-w-0 flex-1 break-all rounded bg-gray-50 px-2 py-1 text-xs text-gray-700 select-all">{inviteFallbackUrl}</code>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(inviteFallbackUrl).catch(() => {});
+                    setCopiedToken("__fallback");
+                    setTimeout(() => setCopiedToken(null), 2000);
+                  }}
+                  className="px-2 py-1 text-xs border rounded hover:bg-gray-50"
+                >
+                  {copiedToken === "__fallback" ? ct.invitations.linkCopied : ct.invitations.copyLink}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Invitation list */}
@@ -991,7 +1121,7 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
           ) : (
             <div className="space-y-2">
               {invitations.map((inv) => (
-                <div key={inv.id} className="bg-white border rounded-lg p-3 flex items-center gap-3">
+                <div key={inv.id} className="bg-white border rounded-lg p-3 flex flex-wrap items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">
                       {inv.client_name || inv.client_email}
@@ -1011,6 +1141,17 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
                   >
                     {ct.invitations[inv.status as keyof typeof ct.invitations] ?? inv.status}
                   </span>
+                  {(inv.status === "pending" || inv.status === "expired") && (
+                    <div className="flex flex-wrap gap-1">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); void resendInvite(inv.id); }}
+                        disabled={resending === inv.id}
+                        className="px-2 py-1 text-xs border rounded hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        {resending === inv.id ? "…" : resentId === inv.id ? `✓ ${ct.invitations.resent}` : ct.invitations.resend}
+                      </button>
+                    </div>
+                  )}
                   {inv.status === "pending" && (
                     <div className="flex gap-1">
                       <button
@@ -1195,7 +1336,7 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
       {tab === "lvProfile" && (
         <LvProfilePanel
           lang={lang === "EN" ? "EN" : "IS"}
-          clients={clients.map((c) => ({ id: c.id, name: c.name }))}
+          clients={clients.map((c) => ({ id: c.id, name: clientDisplayName(c, isIS ? "IS" : "EN") }))}
         />
       )}
 
@@ -1203,7 +1344,7 @@ export default function TrainerDashboard({ teamId }: { teamId: string }) {
       {tab === "vbt" && (
         <VbtPanel
           lang={lang === "EN" ? "EN" : "IS"}
-          clients={clients.map((c) => ({ id: c.id, name: c.name }))}
+          clients={clients.map((c) => ({ id: c.id, name: clientDisplayName(c, isIS ? "IS" : "EN") }))}
         />
       )}
 

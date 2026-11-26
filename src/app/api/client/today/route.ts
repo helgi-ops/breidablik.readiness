@@ -146,6 +146,15 @@ export async function GET(req: Request) {
     weekday_index: number | null;
     rest_day: boolean;
     next_session_label: string | null;
+    /** ISO weekday (1=Mon..7=Sun) of the next session on a rest day; the client localises it. */
+    next_session_weekday?: number | null;
+    /** "starter" = a starter programme assignment, "custom" = the trainer's own plan.
+     *  Moving a session only works for custom plans (pt_session_reschedules). */
+    plan_source?: "starter" | "custom";
+    /** Starter assignment that hasn't started yet: its first day (YYYY-MM-DD). */
+    upcoming_start?: string | null;
+    /** Starter assignment that has run its full length. */
+    completed?: boolean;
     /** When kind=session: only the block scheduled for today. When rest:
      *  preview of the NEXT scheduled session (1 block) so client can see
      *  what's coming. UI label distinguishes session-today vs preview. */
@@ -292,6 +301,7 @@ export async function GET(req: Request) {
       };
 
       const common = {
+        plan_source: "starter" as const,
         weeks_per_phase: weeksPerPhase,
         total_phases: totalPhases,
         programme_name: programmeName,
@@ -322,7 +332,7 @@ export async function GET(req: Request) {
         // Preview = first block (same logic for both 2-day and 3-day
         // starter programmes since fallback schedule starts with block 0
         // on Monday). Client UI labels this as "Næsta æfing — preview".
-        const previewBlock = Array.isArray(blocks) && blocks.length > 0 ? blocks[0] : null;
+        const previewBlock = Array.isArray(blocks) && blocks.length > 0 ? (blocks[slot.nextBlockIndex ?? 0] ?? blocks[0]) : null;
         explosive = {
           level: ep.level,
           phase: slot.phase,
@@ -333,6 +343,7 @@ export async function GET(req: Request) {
           weekday_index: slot.weekdayIso,
           rest_day: true,
           next_session_label: slot.nextSessionLabel,
+          next_session_weekday: slot.nextSessionWeekdayIso,
           blocks: previewBlock ? [applyPhase(previewBlock)] : [],
           ...common,
         };
@@ -349,6 +360,8 @@ export async function GET(req: Request) {
           rest_day: true,
           next_session_label: null,
           blocks: [],
+          upcoming_start: slot.kind === "not_started" ? ep.start_date : null,
+          completed: slot.kind === "completed",
           ...common,
         };
       }
@@ -358,6 +371,7 @@ export async function GET(req: Request) {
         explosive.rest_day = true;
         explosive.blocks = [];
         explosive.next_session_label = null;
+        explosive.next_session_weekday = null;
       }
 
       // Closed loop + auto-progression: target weights come from the WORKING
@@ -484,13 +498,12 @@ export async function GET(req: Request) {
 
       const WEEKDAY_IS = ["Mánudagur","Þriðjudagur","Miðvikudagur","Fimmtudagur","Föstudagur","Laugardagur","Sunnudagur"];
 
-      let rows: Array<Record<string, unknown>> = [];
-      if (sessionRow) {
-        const session = sessionRow as { id: string; session_name: string };
+      // A session's prescriptions mapped to the rows the client renders.
+      const loadRows = async (sessionId: string): Promise<Array<Record<string, unknown>>> => {
         const { data: rxRows } = await sb
           .from("individual_training_prescriptions")
           .select("exercise_id, sort_order, sets, reps, load_type, load_value, rest_seconds, rpe_target, tempo, notes, group_label, method, vbt")
-          .eq("session_id", session.id)
+          .eq("session_id", sessionId)
           .order("sort_order", { ascending: true });
         const rx = ((rxRows ?? []) as Array<{
           exercise_id: string | null; sets: number | null; reps: string | null;
@@ -513,7 +526,7 @@ export async function GET(req: Request) {
           });
         }
 
-        rows = rx.map((r, i) => {
+        return rx.map((r, i) => {
           const d = r.exercise_id ? descById.get(r.exercise_id) : undefined;
           return {
             num: String(i + 1),
@@ -538,29 +551,75 @@ export async function GET(req: Request) {
             notes: r.notes,
           };
         });
+      };
+
+      const rows = sessionRow ? await loadRows(sessionRow.id) : [];
+
+      // Rest day (not a moved-away session): find the plan's next session so the
+      // client sees what's coming, like the starter programmes do. Same week
+      // later in the week, else the earliest session of the next week.
+      let nextSession: { id: string; session_name: string; day_of_week: number } | null = null;
+      let nextRows: Array<Record<string, unknown>> = [];
+      if (!sessionRow && !movedTo) {
+        const { data: upcomingRows } = await sb
+          .from("individual_training_sessions")
+          .select("id, session_name, week_number, day_of_week, sort_order")
+          .eq("plan_id", plan.id)
+          .in("week_number", [weekNumber, weekNumber + 1])
+          .order("week_number", { ascending: true })
+          .order("day_of_week", { ascending: true })
+          .order("sort_order", { ascending: true });
+        const ups = (upcomingRows ?? []) as Array<{ id: string; session_name: string; week_number: number; day_of_week: number }>;
+        const hit = ups.find((u) => u.week_number > weekNumber || u.day_of_week > isoWeekday) ?? null;
+        if (hit) {
+          nextSession = { id: hit.id, session_name: hit.session_name, day_of_week: hit.day_of_week };
+          nextRows = await loadRows(hit.id);
+        }
       }
 
       explosive = {
         level: "",
+        plan_source: "custom",
         programme_name: plan.plan_name,
         phase: weekNumber,
-        phase_name: sessionRow ? (sessionRow as { session_name: string }).session_name : "Hvíldardagur",
+        phase_name: sessionRow?.session_name ?? nextSession?.session_name ?? "",
         weeks_label: `Week ${weekNumber}`,
         week_in_phase: 1,
         weekday_label: WEEKDAY_IS[isoWeekday - 1] ?? null,
         weekday_index: isoWeekday,
         rest_day: !sessionRow,
         next_session_label: null,
+        next_session_weekday: nextSession?.day_of_week ?? null,
         moved_from: movedFrom,
         moved_to: movedTo,
         weeks_per_phase: 1,
         total_phases: totalWeeks,
         intro_ramp: introRampActivePlan,
         blocks: sessionRow
-          ? [{ name: (sessionRow as { session_name: string }).session_name, rows }]
-          : [],
+          ? [{ name: sessionRow.session_name, rows }]
+          : nextSession && nextRows.length > 0
+            ? [{ name: nextSession.session_name, rows: nextRows }]
+            : [],
       };
     }
+  }
+
+  // ── Nothing today: is a plan already set up to start later? ───────
+  // Without this a new client whose trainer assigned a plan starting next
+  // Monday saw "No session planned" — as if nothing had been done.
+  let upcomingPlan: { name: string; start_date: string } | null = null;
+  if (!explosive) {
+    const { data: futureRow } = await sb
+      .from("individual_training_plans")
+      .select("plan_name, start_date")
+      .eq("player_id", player.id)
+      .eq("status", "active")
+      .gt("start_date", today)
+      .order("start_date", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    const fr = futureRow as { plan_name: string; start_date: string } | null;
+    if (fr) upcomingPlan = { name: fr.plan_name, start_date: fr.start_date };
   }
 
   // ── Custom template player-override active for today ──────────────
@@ -765,6 +824,8 @@ export async function GET(req: Request) {
           short: (team as { club_short_name: string | null }).club_short_name }
       : null,
     explosive,
+    // A plan that starts later (only when there is nothing for today).
+    upcoming_plan: upcomingPlan,
     customOverride: overrideRow ?? null,
     readinessToday: readinessToday ?? null,
     // Has the athlete logged any set today? Drives the "you have a session

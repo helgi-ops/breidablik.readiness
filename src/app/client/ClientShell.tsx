@@ -21,6 +21,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import { authFetch } from "@/lib/client/authFetch";
 import InstallPrompt from "@/components/client/InstallPrompt";
 import PlayerPrivacyConsentPrompt from "@/components/player/PlayerPrivacyConsentPrompt";
 
@@ -49,8 +50,27 @@ const TABS: Tab[] = [
 export default function ClientShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname() ?? "/client";
-  const [lang] = useLang();
+  const [lang, setLang] = useLang();
   const [authed, setAuthed] = useState<boolean | null>(null);
+  const [uid, setUid] = useState<string | null>(null);
+
+  // Tell the server which language this client uses the app in (players.app_language),
+  // so reminders and sent sessions come in it. Only when it differs from what this
+  // browser last reported — same as the team app (PlayerClient).
+  useEffect(() => {
+    if (!authed || !uid) return;
+    const key = `mp_lang_reported_client:${uid}`;
+    try { if (window.localStorage.getItem(key) === lang) return; } catch { return; }
+    let cancelled = false;
+    void authFetch("/api/player/language", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lang }),
+    })
+      .then((r) => { if (r.ok && !cancelled) { try { window.localStorage.setItem(key, lang); } catch { /* private mode */ } } })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [authed, uid, lang]);
 
   useEffect(() => {
     let alive = true;
@@ -108,6 +128,7 @@ export default function ClientShell({ children }: { children: ReactNode }) {
         /* fail-safe: stay on /client on any error */
       }
       if (!alive) return;
+      setUid(data.session.user.id);
       setAuthed(true);
     })();
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
@@ -129,16 +150,31 @@ export default function ClientShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-background pb-20">
       <header className="sticky top-0 z-30 bg-white border-b border-slate-200 px-4 py-2.5 flex items-center justify-between">
         <span className="text-sm font-semibold text-slate-900">MicroPulse PT</span>
-        <button
-          type="button"
-          onClick={async () => {
-            await supabase.auth.signOut();
-            router.replace("/login");
-          }}
-          className="text-xs text-slate-500 hover:text-slate-900"
-        >
-          {lang === "IS" ? "Útskrá" : "Sign out"}
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="flex overflow-hidden rounded-md border border-slate-200 text-[11px] font-semibold" role="group" aria-label="Language">
+            {(["EN", "IS"] as const).map((l) => (
+              <button
+                key={l}
+                type="button"
+                onClick={() => setLang(l)}
+                aria-pressed={lang === l}
+                className={`px-2 py-1 ${lang === l ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-900"}`}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              await supabase.auth.signOut();
+              router.replace("/login");
+            }}
+            className="text-xs text-slate-500 hover:text-slate-900"
+          >
+            {lang === "IS" ? "Útskrá" : "Sign out"}
+          </button>
+        </div>
       </header>
 
       <div className="mx-auto w-full max-w-2xl px-3 py-3">
@@ -146,7 +182,7 @@ export default function ClientShell({ children }: { children: ReactNode }) {
       </div>
 
       <InstallPrompt lang={lang === "EN" ? "EN" : "IS"} />
-      <PlayerPrivacyConsentPrompt />
+      <PlayerPrivacyConsentPrompt variant="pt" />
 
       <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200 px-1 py-1.5 shadow-[0_-2px_8px_rgba(0,0,0,0.04)]">
         <div className="mx-auto max-w-2xl grid grid-cols-5">

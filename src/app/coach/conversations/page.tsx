@@ -4,6 +4,37 @@ import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import ChatThread from "@/components/chat/ChatThread";
 import BroadcastModal from "@/components/chat/BroadcastModal";
+import { useLang } from "@/lib/lang";
+
+// Personal-trainer practices talk to "clients", clubs to "players".
+const COPY = {
+  EN: {
+    titleClub: "Chat with players", titlePt: "Chat with clients",
+    subClub: "Every conversation between coaches and players in one place.",
+    subPt: "Every conversation with your clients in one place.",
+    broadcast: "Group message",
+    searchClub: "Search players…", searchPt: "Search clients…",
+    loading: "Loading conversations…",
+    none: "No conversations yet.",
+    you: "You",
+    pick: "Pick a conversation to open the chat.",
+    back: "← All conversations",
+    today: "Today", yesterday: "Yesterday",
+  },
+  IS: {
+    titleClub: "Spjall við leikmenn", titlePt: "Spjall við viðskiptavini",
+    subClub: "Öll samskipti milli þjálfara og leikmanna á einum stað.",
+    subPt: "Öll samskipti við viðskiptavinina þína á einum stað.",
+    broadcast: "Hópskilaboð",
+    searchClub: "Leita að leikmanni…", searchPt: "Leita að viðskiptavini…",
+    loading: "Hleð samtölum...",
+    none: "Engin samtöl fundust.",
+    you: "Þú",
+    pick: "Veldu samtal til að opna spjall.",
+    back: "← Öll samtöl",
+    today: "Í dag", yesterday: "Í gær",
+  },
+} as const;
 
 type ThreadSummary = {
   player_id: string;
@@ -24,6 +55,10 @@ export default function ConversationsPage() {
   const [search, setSearch] = useState("");
   const [broadcastOpen, setBroadcastOpen] = useState(false);
   const [coachTeamId, setCoachTeamId] = useState<string | null>(null);
+  const [isPt, setIsPt] = useState(false);
+  const [lang] = useLang();
+  const c = COPY[lang];
+  const locale = lang === "IS" ? "is-IS" : "en-GB";
 
   useEffect(() => {
     loadThreads();
@@ -54,6 +89,8 @@ export default function ConversationsPage() {
       }
       if (!teamId) return;
       setCoachTeamId(teamId);
+      const { data: team } = await supabase.from("teams").select("team_type").eq("id", teamId).maybeSingle();
+      setIsPt(String((team as { team_type?: string | null } | null)?.team_type ?? "") === "personal_trainer");
 
       // Get recent messages grouped by player+date with last message info
       const { data: messages } = await supabase
@@ -121,12 +158,12 @@ export default function ConversationsPage() {
 
   const formatDate = (d: string) => {
     try {
-      const today = new Date().toLocaleDateString("en-CA", { timeZone: "Atlantic/Reykjavik" });
-      if (d === today) return "Í dag";
+      const today = new Date().toLocaleDateString("en-CA");
+      if (d === today) return c.today;
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
-      if (d === yesterday.toLocaleDateString("en-CA", { timeZone: "Atlantic/Reykjavik" })) return "Í gær";
-      return new Date(d + "T00:00:00").toLocaleDateString("is-IS", { day: "numeric", month: "short" });
+      if (d === yesterday.toLocaleDateString("en-CA")) return c.yesterday;
+      return new Date(d + "T00:00:00").toLocaleDateString(locale, { day: "numeric", month: "short" });
     } catch {
       return d;
     }
@@ -134,10 +171,9 @@ export default function ConversationsPage() {
 
   const formatTime = (iso: string) => {
     try {
-      return new Date(iso).toLocaleTimeString("is-IS", {
+      return new Date(iso).toLocaleTimeString(locale, {
         hour: "2-digit",
         minute: "2-digit",
-        timeZone: "Atlantic/Reykjavik",
       });
     } catch {
       return "";
@@ -146,10 +182,10 @@ export default function ConversationsPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 mb-1">Spjall við leikmenn</h1>
-          <p className="text-sm text-slate-500">Öll samskipti milli þjálfara og leikmanna á einum stað.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-slate-900 mb-1">{isPt ? c.titlePt : c.titleClub}</h1>
+          <p className="text-sm text-slate-500">{isPt ? c.subPt : c.subClub}</p>
         </div>
         <button
           onClick={() => setBroadcastOpen(true)}
@@ -158,7 +194,7 @@ export default function ConversationsPage() {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M22 2L11 13" /><path d="M22 2l-7 20-4-9-9-4 20-7z" />
           </svg>
-          Hópskilaboð
+          {c.broadcast}
         </button>
       </div>
 
@@ -166,23 +202,24 @@ export default function ConversationsPage() {
         <BroadcastModal open={broadcastOpen} onClose={() => setBroadcastOpen(false)} teamId={coachTeamId} />
       )}
 
-      <div className="flex gap-6 min-h-[600px]">
+      {/* Phone: the list, or the open chat with a back link. Wider: side by side. */}
+      <div className="flex flex-col gap-6 md:min-h-[600px] md:flex-row">
         {/* Thread list */}
-        <div className="w-full max-w-sm shrink-0">
+        <div className={`w-full md:max-w-sm md:shrink-0 ${selectedThread ? "hidden md:block" : ""}`}>
           <input
             type="text"
-            placeholder="Leita að leikmann..."
+            placeholder={isPt ? c.searchPt : c.searchClub}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="mb-3 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
           />
 
           {loading && (
-            <div className="text-sm text-slate-400 py-8 text-center">Hleð samtölum...</div>
+            <div className="text-sm text-slate-400 py-8 text-center">{c.loading}</div>
           )}
 
           {!loading && filtered.length === 0 && (
-            <div className="text-sm text-slate-400 py-8 text-center">Engin samtöl fundust.</div>
+            <div className="text-sm text-slate-400 py-8 text-center">{c.none}</div>
           )}
 
           <div className="space-y-1">
@@ -219,7 +256,7 @@ export default function ConversationsPage() {
                     </div>
                   </div>
                   <div className={`mt-1 text-xs truncate ${isActive ? "text-slate-300" : "text-slate-500"}`}>
-                    {t.last_sender_role === "player" ? t.player_name.split(" ")[0] : "Þú"}
+                    {t.last_sender_role === "player" ? t.player_name.split(" ")[0] : c.you}
                     {": "}
                     {t.last_body.slice(0, 60)}{t.last_body.length > 60 ? "..." : ""}
                   </div>
@@ -233,7 +270,16 @@ export default function ConversationsPage() {
         </div>
 
         {/* Chat area */}
-        <div className="flex-1">
+        <div className={`min-w-0 flex-1 ${selectedThread ? "" : "hidden md:block"}`}>
+          {selectedThread && (
+            <button
+              type="button"
+              onClick={() => setSelectedThread(null)}
+              className="mb-3 text-sm font-medium text-slate-600 hover:text-slate-900 md:hidden"
+            >
+              {c.back}
+            </button>
+          )}
           {selectedThread ? (
             <ChatThread
               playerId={selectedThread.player_id}
@@ -244,7 +290,7 @@ export default function ConversationsPage() {
             />
           ) : (
             <div className="flex items-center justify-center h-full text-slate-400 text-sm">
-              Veldu samtal til að opna spjall.
+              {c.pick}
             </div>
           )}
         </div>

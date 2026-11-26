@@ -1,10 +1,11 @@
 "use client";
 
 /**
- * KsiReportPdf — the Breiðablik-branded KSÍ (federation call-up) dossier, ONE PAGE PER
+ * KsiReportPdf — the club-branded KSÍ (federation call-up) dossier, ONE PAGE PER
  * PLAYER: header + key numbers, an athletic radar (squad percentile), the coach-curated
  * injuries/factors and individual strength/prevention programme, then the club load summary
- * and the daily breakdown. Mirrors the transfer dossier's look.
+ * and the daily breakdown. Mirrors the transfer dossier's look. The header shows the
+ * coach's own club (name + logo from teams, see clubBrand.ts), never a hardcoded crest.
  *
  * WinAnsi/Helvetica (Icelandic-safe): sanitise arrows / emoji / U+2212 out of coach text.
  * Descriptive export — never a readiness colour or availability decision. The coach downloads
@@ -12,6 +13,7 @@
  */
 
 import { Document, Page, StyleSheet, Text, View, Image, Svg, Polygon, Line, Circle, Rect, pdf } from "@react-pdf/renderer";
+import type { ClubBrand } from "@/lib/club/clubBrand";
 
 type Lang = "EN" | "IS";
 export type KsiPdfRadarAxis = { key: string; labelIs: string; labelEn: string; unit: string; value: number; pct: number | null };
@@ -32,7 +34,6 @@ export type KsiPdfPlayer = {
 };
 
 const INK = "#14181c", MUTE = "#6b7280", LINE = "#e5e7eb", COBALT = "#2740e6";
-const LOGO = "/breidablik-ubk-vector-logo.png";
 
 /** WinAnsi-safe: Helvetica can't render arrows / emoji / minus-sign. */
 const wa = (s: string): string =>
@@ -139,7 +140,7 @@ function TrendBars({ days, get, label, avgText, peakText, color }: { days: KsiPd
 const T = {
   IS: {
     eyebrow: "KSÍ – ÁLAGS- OG STÖÐUSKÝRSLA", window: "tímabil", sessions: "lotur",
-    prepared: "Unnið af", club: "Breiðablik", generated: "útbúið",
+    prepared: "Unnið af", generated: "útbúið",
     keySess: "Lotur", keyDist: "Vegalengd", keyMax: "Hám.hraði", keyHsr: "Háhraði", keyPl: "Álag (PL)",
     keyMatches: "Leikir", keyMinutes: "Mínútur",
     trends: "Þróun per lotu", avg: "meðaltal", peakw: "hæst",
@@ -158,7 +159,7 @@ const T = {
   },
   EN: {
     eyebrow: "KSÍ – LOAD & STATUS REPORT", window: "window", sessions: "sessions",
-    prepared: "Prepared by", club: "Breiðablik", generated: "generated",
+    prepared: "Prepared by", generated: "generated",
     keySess: "Sessions", keyDist: "Distance", keyMax: "Top speed", keyHsr: "High-speed", keyPl: "Load (PL)",
     keyMatches: "Matches", keyMinutes: "Minutes",
     trends: "Per-session trend", avg: "avg", peakw: "peak",
@@ -177,7 +178,7 @@ const T = {
   },
 } as const;
 
-function PlayerPage({ p, from, to, lang, preparedBy, generated }: { p: KsiPdfPlayer; from: string; to: string; lang: Lang; preparedBy: string | null; generated: string }) {
+function PlayerPage({ p, from, to, lang, preparedBy, generated, club }: { p: KsiPdfPlayer; from: string; to: string; lang: Lang; preparedBy: string | null; generated: string; club: ClubBrand }) {
   const t = T[lang];
   const dailyCols = [t.date, t.min, t.dist, t.hsr, t.sprint, t.maxv, t.acc, t.dec, t.pl, t.ima];
   const avg = (get: (d: KsiPdfDay) => number) => (p.days.length ? p.days.reduce((a, d) => a + get(d), 0) / p.days.length : 0);
@@ -186,14 +187,14 @@ function PlayerPage({ p, from, to, lang, preparedBy, generated }: { p: KsiPdfPla
     <Page size="A4" style={s.page}>
       <View style={s.head}>
         {/* eslint-disable-next-line jsx-a11y/alt-text */}
-        <Image src={LOGO} style={s.logo} />
+        {club.logoUrl ? <Image src={club.logoUrl} style={s.logo} /> : null}
         <View style={{ flex: 1 }}>
           <Text style={s.eyebrow}>{t.eyebrow}</Text>
           <Text style={s.h1}>{p.full_name}</Text>
           <Text style={s.sub}>{`${from} - ${to}  ·  ${p.sessions} ${t.sessions}`}</Text>
         </View>
       </View>
-      <Text style={s.byline}>{`${t.prepared} ${preparedBy ?? t.club} · ${t.club} · ${t.generated} ${generated}`}</Text>
+      <Text style={s.byline}>{[(preparedBy || club.name) ? `${t.prepared} ${preparedBy || club.name}` : null, preparedBy && club.name ? club.name : null, `${t.generated} ${generated}`].filter(Boolean).join(" · ")}</Text>
 
       <View style={s.idstrip}>
         <View style={s.idcell}><Text style={s.idlabel}>{t.keySess}</Text><Text style={s.idval}>{p.sessions}</Text></View>
@@ -300,13 +301,15 @@ function PlayerPage({ p, from, to, lang, preparedBy, generated }: { p: KsiPdfPla
   );
 }
 
-export function KsiDoc({ players, from, to, lang, preparedBy }: { players: KsiPdfPlayer[]; from: string; to: string; lang: Lang; preparedBy: string | null }) {
+export function KsiDoc({ players, from, to, lang, preparedBy, club }: { players: KsiPdfPlayer[]; from: string; to: string; lang: Lang; preparedBy: string | null; club: ClubBrand }) {
   const generated = new Date().toISOString().slice(0, 10);
-  return <Document>{players.map((p, i) => <PlayerPage key={i} p={p} from={from} to={to} lang={lang} preparedBy={preparedBy} generated={generated} />)}</Document>;
+  return <Document>{players.map((p, i) => <PlayerPage key={i} p={p} from={from} to={to} lang={lang} preparedBy={preparedBy} generated={generated} club={club} />)}</Document>;
 }
 
-export async function downloadKsiReportPdf(players: KsiPdfPlayer[], from: string, to: string, lang: Lang, preparedBy: string | null = null) {
-  const blob = await pdf(<KsiDoc players={players} from={from} to={to} lang={lang} preparedBy={preparedBy} />).toBlob();
+export async function downloadKsiReportPdf(players: KsiPdfPlayer[], from: string, to: string, lang: Lang, preparedBy: string | null, club: ClubBrand) {
+  const render = (c: ClubBrand) => pdf(<KsiDoc players={players} from={from} to={to} lang={lang} preparedBy={preparedBy} club={c} />).toBlob();
+  // A logo that can't be read (wrong format, removed file) must not block the report: retry without it.
+  const blob = await render(club).catch((e) => { if (!club.logoUrl) throw e; return render({ ...club, logoUrl: null }); });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

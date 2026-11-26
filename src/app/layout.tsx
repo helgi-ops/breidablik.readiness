@@ -11,9 +11,23 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 const archivo = Archivo({ variable: "--font-archivo", subsets: ["latin"], weight: ["600", "700", "800"] });
 
+const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.micropulse.is";
+const SITE_DESCRIPTION =
+  "Training load and readiness for football clubs, basketball teams and personal trainers — every verdict explained.";
+
 export const metadata: Metadata = {
-  title: "MicroPulse",
-  description: "Dagleg líðansskráning og þjálfanaálag.",
+  metadataBase: new URL(SITE_URL),
+  // Public pages set their own title (see each route's layout.tsx); app pages keep "MicroPulse".
+  title: { default: "MicroPulse", template: "%s · MicroPulse" },
+  description: SITE_DESCRIPTION,
+  applicationName: "MicroPulse",
+  openGraph: {
+    type: "website",
+    siteName: "MicroPulse",
+    title: "MicroPulse",
+    description: SITE_DESCRIPTION,
+  },
+  twitter: { card: "summary_large_image", title: "MicroPulse", description: SITE_DESCRIPTION },
   // Static fallback — DynamicManifest (client) will swap this to
   // /api/manifest?team_id=... once the user's team is known.
   manifest: "/api/manifest",

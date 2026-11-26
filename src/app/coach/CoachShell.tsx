@@ -512,7 +512,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
         </main>
 
         {/* PWA bottom navigation — only renders in standalone/PWA mode */}
-        <CoachPwaBottomNav />
+        <CoachPwaBottomNav isPt={isPt} lang={lang} />
       </div>
     </div>
   );

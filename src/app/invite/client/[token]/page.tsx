@@ -9,11 +9,11 @@
  *        - Inline signup form (name + password, email pre-filled from invite,
  *          role hard-coded to PLAYER). After signUp completes we call accept
  *          immediately so the new account already has a players row when
- *          they land on /player.
+ *          they land on /client.
  *        - Or a "I already have an account → sign in" link.
  *   3. If signed in:
  *        - Verify email matches the invite, then call POST accept and
- *          redirect to /player.
+ *          redirect to /client.
  *
  * Replaces the broken `/signup?invite=…` flow which always created COACH
  * accounts because /signup hardcodes role: "COACH". Aníta Rut Helgadóttir
@@ -27,6 +27,7 @@ import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { useLang } from "@/lib/lang";
 
 type InviteStatus = "pending" | "accepted" | "revoked" | "expired";
 
@@ -48,8 +49,6 @@ type InviteInfo = {
   } | null;
 };
 
-type Lang = "IS" | "EN";
-
 const COPY = {
   IS: {
     title: "Velkomin/n",
@@ -59,7 +58,7 @@ const COPY = {
     revokedHeader: "Boðið hefur verið afturkallað",
     acceptedHeader: "Þú ert nú þegar tengd/ur þjálfara",
     pendingHeader: "Þú hefur fengið boð frá",
-    inviteEmailLabel: "Boð sent á",
+    inviteEmailLabel: "Netfangið þitt",
     nameLabel: "Fullt nafn",
     passwordLabel: "Lykilorð",
     passwordHint: "Lágmark 6 stafir",
@@ -69,6 +68,8 @@ const COPY = {
     accepting: "Samþykki boð…",
     orSignIn: "Ertu nú þegar með aðgang?",
     signInLabel: "Skrá inn",
+    privacyPre: "Þjálfarinn þinn og MicroPulse vinna æfingagögnin þín.",
+    privacyLink: "Persónuvernd",
     successHeader: "Allt komið!",
     successBody: "Þú ert tengd/ur þjálfara. Fer á viðskiptavinasvæðið…",
     openPlayer: "Fara á viðskiptavinasvæði",
@@ -79,6 +80,8 @@ const COPY = {
     backHome: "Aftur á forsíðu",
     mismatchWarning: "Þú ert skráð/ur inn með öðru netfangi. Skráðu þig út og notaðu",
     signOut: "Skrá út",
+    askNew: "Biddu þjálfarann þinn að senda þér nýtt boð.",
+    checkEmail: "Aðgangurinn er tilbúinn. Staðfestu netfangið: opnaðu póstinn sem við sendum og smelltu á hlekkinn. Þá klárast tengingin við þjálfarann.",
   },
   EN: {
     title: "Welcome",
@@ -88,7 +91,7 @@ const COPY = {
     revokedHeader: "This invitation has been revoked",
     acceptedHeader: "You're already linked to this trainer",
     pendingHeader: "You've been invited by",
-    inviteEmailLabel: "Invitation sent to",
+    inviteEmailLabel: "Your email",
     nameLabel: "Full name",
     passwordLabel: "Password",
     passwordHint: "At least 6 characters",
@@ -98,6 +101,8 @@ const COPY = {
     accepting: "Accepting…",
     orSignIn: "Already have an account?",
     signInLabel: "Sign in",
+    privacyPre: "Your trainer and MicroPulse process your training data.",
+    privacyLink: "Privacy",
     successHeader: "All set!",
     successBody: "You're linked to your trainer. Redirecting to the client area…",
     openPlayer: "Go to client area",
@@ -108,6 +113,8 @@ const COPY = {
     backHome: "Back to home",
     mismatchWarning: "You're signed in with a different email. Sign out and use",
     signOut: "Sign out",
+    askNew: "Ask your trainer to send you a new invitation.",
+    checkEmail: "Your account is ready. Confirm your email: open the message we just sent and tap the link. That finishes linking you to your trainer.",
   },
 } as const;
 
@@ -119,7 +126,7 @@ export default function ClientInviteAcceptPage({
   const { token } = use(params);
   const router = useRouter();
 
-  const [lang, setLang] = useState<Lang>("IS");
+  const [lang, setLang] = useLang();
   const t = COPY[lang];
 
   const [info, setInfo] = useState<InviteInfo | null>(null);
@@ -136,11 +143,8 @@ export default function ClientInviteAcceptPage({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-
-  useEffect(() => {
-    const saved = typeof window !== "undefined" ? window.localStorage.getItem("mp_lang") : null;
-    if (saved === "IS" || saved === "EN") setLang(saved);
-  }, []);
+  // "Confirm your email" after signup — good news, not an error.
+  const [notice, setNotice] = useState<string | null>(null);
 
   // Fetch invite + team info.
   useEffect(() => {
@@ -228,6 +232,7 @@ export default function ClientInviteAcceptPage({
     event.preventDefault();
     if (!info) return;
     setSubmitError(null);
+    setNotice(null);
     if (password.length < 6) { setSubmitError(t.errorPassword); return; }
 
     setSubmitting(true);
@@ -264,12 +269,10 @@ export default function ClientInviteAcceptPage({
           setTimeout(() => router.push("/client"), 1400);
         }
       } else {
-        // Show a "check your email" style success — but for PT clients we
-        // usually run with email confirm off in dev / production, so this
-        // branch is rare. Surface a friendly note.
-        setSubmitError(lang === "IS"
-          ? "Aðgangur stofnaður — staðfestu netfangið þitt og smelltu aftur á linkinn í tölvupóstinum."
-          : "Account created — confirm your email and click the link again.");
+        // Email confirmation is on: the confirmation link brings them back here
+        // signed in, and the "Accept invitation" button finishes it.
+        setNotice(t.checkEmail);
+        setPassword("");
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -296,7 +299,7 @@ export default function ClientInviteAcceptPage({
   const loginUrl = `/login?next=${encodeURIComponent(`/invite/client/${token}`)}`;
 
   return (
-    <main className="min-h-screen bg-white px-6 py-12 text-neutral-900">
+    <main className="min-h-screen bg-background px-4 py-12 text-neutral-900 sm:px-6">
       <div className="mx-auto w-full max-w-md">
         <div className="mb-6 flex items-start justify-between">
           <div>
@@ -306,14 +309,14 @@ export default function ClientInviteAcceptPage({
           <div className="mt-1 flex shrink-0 overflow-hidden rounded-lg border text-xs font-semibold">
             <button
               type="button"
-              onClick={() => setLang("IS")}
-              className={`px-3 py-1.5 transition ${lang === "IS" ? "bg-neutral-900 text-white" : "text-neutral-500 hover:text-neutral-900"}`}
-            >IS</button>
-            <button
-              type="button"
               onClick={() => setLang("EN")}
               className={`px-3 py-1.5 transition ${lang === "EN" ? "bg-neutral-900 text-white" : "text-neutral-500 hover:text-neutral-900"}`}
             >EN</button>
+            <button
+              type="button"
+              onClick={() => setLang("IS")}
+              className={`px-3 py-1.5 transition ${lang === "IS" ? "bg-neutral-900 text-white" : "text-neutral-500 hover:text-neutral-900"}`}
+            >IS</button>
           </div>
         </div>
 
@@ -333,7 +336,11 @@ export default function ClientInviteAcceptPage({
                 {status === "expired" && t.expiredHeader}
                 {status === "revoked" && t.revokedHeader}
                 {status === "accepted" && t.acceptedHeader}
+                {(status === "expired" || status === "revoked") && <div className="mt-1">{t.askNew}</div>}
               </div>
+              {status === "accepted" && (
+                <Link href="/client" className="block text-sm font-medium text-neutral-900 underline">{t.openPlayer}</Link>
+              )}
               <Link href="/" className="text-sm font-medium text-neutral-900 underline">{t.backHome}</Link>
             </div>
           ) : success ? (
@@ -342,7 +349,7 @@ export default function ClientInviteAcceptPage({
                 <div className="font-medium">{t.successHeader}</div>
                 <div className="mt-1">{t.successBody}</div>
               </div>
-              <Link href="/player" className="text-sm font-medium text-neutral-900 underline">{t.openPlayer}</Link>
+              <Link href="/client" className="text-sm font-medium text-neutral-900 underline">{t.openPlayer}</Link>
             </div>
           ) : (
             <div className="space-y-4">
@@ -419,9 +426,16 @@ export default function ClientInviteAcceptPage({
                   {submitError && (
                     <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{submitError}</div>
                   )}
+                  {notice && (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{notice}</div>
+                  )}
                   <div className="text-center text-xs text-neutral-500">
                     {t.orSignIn}{" "}
                     <Link href={loginUrl} className="font-medium text-neutral-900 underline">{t.signInLabel}</Link>
+                  </div>
+                  <div className="text-center text-[11px] text-neutral-500">
+                    {t.privacyPre}{" "}
+                    <Link href="/privacy?for=client" target="_blank" className="underline">{t.privacyLink}</Link>
                   </div>
                 </form>
               )}

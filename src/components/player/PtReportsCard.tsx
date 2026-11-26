@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import PtMonthlyReports from "./PtMonthlyReports";
 
 type Metric = { label: string; value: number | string; unit?: string };
 type TestRow = { product?: string; test_type?: string; date?: string | null; metrics?: Metric[]; left_n?: number | null; right_n?: number | null; asymmetry_percent?: number | null; asymmetry_side?: string | null };
@@ -16,6 +17,8 @@ type Extracted = { athlete?: string | null; report_date?: string | null; body_we
 type Report = {
   id: string; title: string | null; source: string | null; report_date: string | null;
   file_name: string; file_size: number | null; extracted?: Extracted; extracted_status: string; created_at: string; url: string | null;
+  /** Server decides: the trainer may delete any report, a client only their own uploads. */
+  can_delete?: boolean;
 };
 
 export default function PtReportsCard({ clientId, lang }: { clientId?: string; lang: "IS" | "EN" }) {
@@ -136,6 +139,10 @@ export default function PtReportsCard({ clientId, lang }: { clientId?: string; l
         </label>
       </div>
 
+      <div className="mt-3">
+        <PtMonthlyReports clientId={clientId} lang={lang} />
+      </div>
+
       {err && <div className="mt-2 rounded bg-red-50 px-2 py-1 text-[11px] text-red-700">{err}</div>}
       {note && <div className="mt-2 rounded bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700">{note}</div>}
 
@@ -168,9 +175,11 @@ export default function PtReportsCard({ clientId, lang }: { clientId?: string; l
                     {is ? "Skoða" : "View"}
                   </a>
                 )}
-                <button type="button" disabled={busy} onClick={() => del(r.id)} className="text-[11px] text-slate-400 hover:text-red-600 disabled:opacity-50">
-                  {is ? "Eyða" : "Delete"}
-                </button>
+                {r.can_delete !== false && (
+                  <button type="button" disabled={busy} onClick={() => del(r.id)} className="text-[11px] text-slate-400 hover:text-red-600 disabled:opacity-50">
+                    {is ? "Eyða" : "Delete"}
+                  </button>
+                )}
               </div>
             </div>
 

@@ -39,6 +39,8 @@ export type ScheduleSlot =
       weekdayIso: number;
       nextSessionWeekdayIso: number | null;
       nextSessionLabel: string | null;
+      /** Block the next session uses (so a rest day previews the right one). */
+      nextBlockIndex: number | null;
     }
   | { kind: "not_started"; daysUntilStart: number }
   | { kind: "completed"; weeksSinceStart: number };
@@ -130,6 +132,7 @@ export function resolveProgrammeSlot(args: {
       phase, weekInPhase, weeksSinceStart, weekdayIso,
       nextSessionWeekdayIso: nextWd,
       nextSessionLabel: nextWd ? WEEKDAY_LABELS_IS[nextWd - 1] : null,
+      nextBlockIndex: nextWd ? schedule[nextWd - 1] : null,
     };
   }
 
