@@ -295,8 +295,12 @@ export type NearFullSelection<T> = {
 /** Which of a player's matches define his match unit: near-full (≥ minMinutes) inside a rolling window,
  *  widened to all near-full matches when the window is thin. Shared by `computeMatchUnit` and the
  *  per-session "did we do enough?" reference so both use the same match definition. */
+/** The defaults that define "a near-full match" (shared so the UI can say what the match unit is built from). */
+export const NEAR_FULL_MIN_MINUTES = 80;
+export const NEAR_FULL_WINDOW_DAYS = 77;
+export const NEAR_FULL_MIN_SAMPLE = 4;
 export function selectNearFullMatches<T extends { date: string; minutes: number | null }>(rows: T[], opts?: NearFullOpts): NearFullSelection<T> {
-  const minMinutes = opts?.minMinutes ?? 80, windowDays = opts?.windowDays ?? 77, minSample = opts?.minSample ?? 4;
+  const minMinutes = opts?.minMinutes ?? NEAR_FULL_MIN_MINUTES, windowDays = opts?.windowDays ?? NEAR_FULL_WINDOW_DAYS, minSample = opts?.minSample ?? NEAR_FULL_MIN_SAMPLE;
   const nearFull = rows.filter((r) => r.minutes != null && r.minutes >= minMinutes);
   const asOf = opts?.asOfMs ?? (nearFull.length ? Math.max(...nearFull.map((r) => Date.parse(r.date))) : Date.now());
   const inWindow = nearFull.filter((r) => asOf - Date.parse(r.date) <= windowDays * 86_400_000);

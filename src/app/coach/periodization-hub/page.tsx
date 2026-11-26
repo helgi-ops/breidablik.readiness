@@ -58,7 +58,8 @@ import { mesoWeekFor as mesoWeekOf, preseasonInputFor, seasonMesoBlocks, teamCal
 import PreseasonReadsFrom from "@/components/coach/PreseasonReadsFrom";
 import { checkThreeInARow, THREE_IN_A_ROW_RULE, type WeekRuleDay } from "@/lib/micropulse/weekSetup/weekRules";
 import { MacroSetupChecklist, MacroFixturesCard, MacroBreaksCard, MacroSetupGate, firstLeagueGame, type MacroFixture } from "@/components/coach/MacroSetupCards";
-import PreseasonWeek1Table from "@/components/coach/PreseasonWeek1Table";
+import PreseasonWeek1Table, { TmBandChip } from "@/components/coach/PreseasonWeek1Table";
+import { teamMatchReference } from "@/lib/micropulse/periodization/matchReference";
 import type { MatchUnit as LibMatchUnit } from "@/lib/micropulse/periodization";
 
 type Bi = { en: string; is: string };
@@ -3380,8 +3381,11 @@ export default function PeriodizationHubPage() {
           </div>
           )}
 
-            {/* PLANNED KPI VOLUME — in-season micro (week) + meso (block), anchored to match demand
-                (Martín-García 2018, Stevens 2017: training as a share of the match per KPI; the weekly multiples and MD-day shape are MicroPulse's, tapering toward the match as in Gualtieri 2024; deload per block). */}
+            {/* THE BLOCK'S WEEKLY VOLUME — in-season, measured against one match per variable (Martín-García 2018,
+                Stevens 2017: training as a share of the match per KPI; the weekly multiples and MD-day shape are
+                MicroPulse's, tapering toward the match as in Gualtieri 2024). Layered read: verdict (the week in ×match)
+                → what "one match" is + whether the weeks differ → one table with the research range → week by week
+                only when the weeks actually differ. Numbers unchanged — presentation only. */}
             {(() => {
               const matchKpis = blkScope === "player" && player ? kpiAvgFromUnit(player.matchUnit) : teamKpiAvg(plan.players);
               const days1 = standardTrainingDays(1);          // a standard 1-match week
@@ -3389,131 +3393,97 @@ export default function PeriodizationHubPage() {
               const vols = kpiVolumes(matchKpis, days1);      // per-KPI, each tapered by its own exponent
               const meso = mesoWeeklyMultiples({ numWeeks: blkWeeks, baseMultiple: wkMult, stepPct: blkStepEff, ...blkMesoDeload });
               const blockTotal = mesoTotalMultiple(meso);
-              const headKeys = (Object.keys(matchKpis) as WeeklyLoadMetricKey[]).slice(0, 2); // 1-2 headline KPIs for the meso table
+              const weeksDiffer = meso.some((w) => w.multiple !== meso[0]?.multiple);
+              const headKeys = (Object.keys(matchKpis) as WeeklyLoadMetricKey[]).slice(0, 2); // 1-2 headline KPIs for the week-by-week table
               const fmtK = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)));
+              const fx = (n: number) => (is ? String(n).replace(".", ",") : String(n));
               // Per-KPI meso multiple: the KPI's OWN tapered weekly ×match, scaled by the week's ramp/deload
               // factor (w.multiple ÷ base). So HSR/sprint ramp from a lower base than distance across the block.
               const rampFactor = (w: { multiple: number }) => (wkMult > 0 ? w.multiple / wkMult : 0);
               const kpiWkMult = (k: WeeklyLoadMetricKey, w: { multiple: number }) => Math.round(weeklyKpiMultiple(days1, k) * rampFactor(w) * 100) / 100;
               const mesoKpi = (k: WeeklyLoadMetricKey, w: { multiple: number }) => { const mv = matchKpis[k]; return mv == null ? null : mv * weeklyKpiMultiple(days1, k) * rampFactor(w); };
+              // What "one match" is — the team's typical full match, or the selected player's own.
+              const ref = blkScope === "player" && player
+                ? { en: `One match = ${player.name}'s typical full match. ${player.matchUnit.windowNote.en}`, is: `Einn leikur = dæmigerður heill leikur ${player.name}. ${player.matchUnit.windowNote.is}` }
+                : teamMatchReference(plan.players.map((p) => p.matchUnit)).note;
+              const weeksLine = weeksDiffer
+                ? (is ? "Vikurnar í lotunni eru ólíkar (stígandi, létt vika eða niðurtröppun) — sjá viku fyrir viku hér að neðan." : "The weeks in this block differ (a ramp, a light week or a deload) — see week by week below.")
+                : (is ? `Allar ${blkWeeks} vikur lotunnar eru eins${blkHold ? " (keppnislota heldur staðalvikunni)" : ""}.` : `All ${blkWeeks} weeks of the block are the same${blkHold ? " (a competitive block holds the standard week)" : ""}.`);
               return (
                 <details className="mt-4" open>
-                  <summary className="cursor-pointer py-1 text-[13px] font-bold text-[#2740e6]">{is ? "Áætlað KPI-magn — vika + meso (keppnistímabil)" : "Planned KPI volume — week + meso (in-season)"}</summary>
+                  <summary className="cursor-pointer py-1 text-[13px] font-bold text-[#2740e6]">{is ? "Vikumagn lotunnar — miðað við einn leik" : "The block's weekly volume — measured against one match"}</summary>
                   <div className="mt-2 rounded-xl border border-slate-200 bg-white p-4">
                     <p className="text-[15px] font-bold leading-snug text-slate-900">{is
-                      ? `Vika ≈ ${wkMult}× leikur í æfingaálagi (+ 1× leikurinn = ${Math.round((wkMult + 1) * 10) / 10}× heildar).`
-                      : `A week ≈ ${wkMult}× a match in training load (+ 1× the match = ${Math.round((wkMult + 1) * 10) / 10}× total).`}</p>
-                    <p className="mt-0.5 text-[12px] text-slate-500">{is ? `${blkScope === "player" && player ? player.name : "Liðsmeðaltal"} · leik-miðað per KPI (Martín-García 2018; hlutföll MD-daga eru val MicroPulse).` : `${blkScope === "player" && player ? player.name : "Team average"} · match-anchored per KPI (Martín-García 2018; MD-day shares are MicroPulse's).`}</p>
+                      ? `Æfingavikan ≈ ${fx(wkMult)}× leikur (+ leikurinn sjálfur = ${fx(Math.round((wkMult + 1) * 10) / 10)}×).`
+                      : `The training week ≈ ${wkMult}× a match (+ the match itself = ${Math.round((wkMult + 1) * 10) / 10}×).`}</p>
+                    <ul className="mt-1.5 space-y-0.5 text-[12.5px] text-slate-600">
+                      <li>{is ? ref.is : ref.en}</li>
+                      <li>{weeksLine}</li>
+                    </ul>
 
                     {vols.length > 0 ? (
-                      <div className="mt-3">
-                        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Vikumark per KPI" : "Weekly target per KPI"}</div>
-                        <div className="mt-1.5 overflow-x-auto">
-                          <table className="w-full text-[12.5px]">
-                            <thead><tr className="text-left text-[10px] uppercase tracking-wide text-slate-400">
-                              <th className="py-1 pr-2 font-medium">KPI</th><th className="py-1 px-2 text-right font-medium">{is ? "Leikur" : "Match"}</th><th className="py-1 px-2 text-right font-medium">× {is ? "leik" : "match"}</th><th className="py-1 pl-2 text-right font-medium">{is ? "Vika" : "Week"}</th>
-                            </tr></thead>
-                            <tbody>
-                              {vols.map((v) => (
-                                <tr key={v.key} className="border-t border-slate-100">
-                                  <td className="py-1.5 pr-2 text-slate-600">{is ? v.label.is : v.label.en}</td>
-                                  <td className="py-1.5 px-2 text-right tabular-nums text-slate-500">{fmtK(v.matchValue)}{v.unit}</td>
-                                  <td className="py-1.5 px-2 text-right tabular-nums text-slate-500">{v.multiple}×</td>
-                                  <td className="py-1.5 pl-2 text-right tabular-nums font-semibold text-slate-900">{fmtK(v.weeklyValue)}{v.unit}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    ) : <p className="mt-2 text-[12px] text-amber-700">{is ? "Ekkert leikvið (GPS) enn — sýni sRPE-álag annars staðar." : "No GPS match unit yet — sRPE load is shown elsewhere."}</p>}
-
-                    <div className="mt-3">
-                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? `Meso — ${blkWeeks} vikur (× leikur per viku)` : `Meso — ${blkWeeks} weeks (×match per week)`}</div>
-                      <div className="mt-1.5 overflow-x-auto">
-                        <table className="w-full text-[12.5px]">
+                      <div className="mt-3 overflow-x-auto">
+                        <table className="w-full min-w-[520px] text-[12.5px]">
                           <thead><tr className="text-left text-[10px] uppercase tracking-wide text-slate-400">
-                            <th className="py-1 pr-2 font-medium">{is ? "Vika" : "Week"}</th><th className="py-1 px-2 text-right font-medium" title={is ? "Rúmmál (vegalengd/PlayerLoad)" : "Volume (distance/PlayerLoad)"}>× {is ? "rúmmál" : "vol"}</th>
-                            {headKeys.map((k) => <th key={k} className="py-1 px-2 text-right font-medium">{is ? WEEKLY_LOAD_LABELS[k].is : WEEKLY_LOAD_LABELS[k].en} <span className="normal-case text-slate-300">(× leik)</span></th>)}
+                            <th className="py-1 pr-2 font-medium">{is ? "Breyta" : "Variable"}</th>
+                            <th className="py-1 px-2 text-right font-medium">{is ? "Einn leikur" : "One match"}</th>
+                            <th className="py-1 px-2 text-right font-medium">× {is ? "leikur" : "a match"}</th>
+                            <th className="py-1 px-2 text-right font-medium">{is ? "Vikan" : "The week"}</th>
+                            <th className="py-1 pl-2 font-medium">{is ? "Rannsóknir (æfing:leikur)" : "Research (training:match)"}</th>
                           </tr></thead>
                           <tbody>
-                            {meso.map((w) => (
-                              <tr key={w.weekIndex} className="border-t border-slate-100">
-                                <td className="py-1.5 pr-2 text-slate-700">{is ? "Vika" : "Wk"} {w.weekIndex}{w.isDeload ? <span className="ml-1 rounded bg-[#de9328]/15 px-1 py-0.5 text-[9px] font-semibold uppercase text-[#de9328]">{w.isLight ? (is ? "létt" : "light") : is ? "niður" : "deload"}</span> : null}</td>
-                                <td className="py-1.5 px-2 text-right tabular-nums font-semibold text-slate-900">{w.multiple}×</td>
-                                {headKeys.map((k) => { const val = mesoKpi(k, w); return <td key={k} className="py-1.5 px-2 text-right tabular-nums text-slate-600">{val == null ? "–" : <><span className="font-semibold text-slate-800">{kpiWkMult(k, w)}×</span> <span className="text-slate-400">{fmtK(val)}{WEEKLY_LOAD_LABELS[k].unit}</span></>}</td>; })}
+                            {vols.map((v) => { const rr = kpiTmRefRange(v.key); return (
+                              <tr key={v.key} className="border-t border-slate-100">
+                                <td className="py-1.5 pr-2 text-slate-700">{is ? v.label.is : v.label.en}</td>
+                                <td className="py-1.5 px-2 text-right tabular-nums text-slate-500">{fmtK(v.matchValue)}{v.unit}</td>
+                                <td className="py-1.5 px-2 text-right tabular-nums text-slate-700">{fx(v.multiple)}×</td>
+                                <td className="py-1.5 px-2 text-right tabular-nums font-semibold text-slate-900">{fmtK(v.weeklyValue)}{v.unit}</td>
+                                <td className="py-1.5 pl-2 text-slate-600">{rr ? <>{fx(rr[0])}–{fx(rr[1])}×<TmBandChip x={v.multiple} refRange={rr} is={is} /></> : (is ? "engin viðmið" : "no reference")}</td>
                               </tr>
-                            ))}
-                            <tr className="border-t-2 border-slate-300 font-semibold">
-                              <td className="py-1.5 pr-2">{is ? "Blokk alls" : "Block total"}</td>
-                              <td className="py-1.5 px-2 text-right tabular-nums text-slate-900">{blockTotal}×</td>
-                              {headKeys.map((k) => { const mv = matchKpis[k]; const totMult = Math.round(meso.reduce((s, w) => s + kpiWkMult(k, w), 0) * 100) / 100; const tot = meso.reduce((s, w) => s + (mesoKpi(k, w) ?? 0), 0); return <td key={k} className="py-1.5 px-2 text-right tabular-nums text-slate-700">{mv == null ? "–" : <><span className="font-semibold text-slate-900">{totMult}×</span> <span className="text-slate-400">{fmtK(tot)}{WEEKLY_LOAD_LABELS[k].unit}</span></>}</td>; })}
-                            </tr>
+                            ); })}
                           </tbody>
                         </table>
                       </div>
-                    </div>
-                    <p className="mt-2 text-[10px] text-slate-400">{is ? `Leik-miðað: hver KPI = leikgildi × SITT vikumargfeldi — háhraði/sprettur safnast upp í lægra margfeldi en vegalengd (æfingadagar ná minna hlutfalli af leik í háhraða en í vegalengd; Stevens 2017). Vikan bylgjast um MD (MD-4 þyngst), ${blkHold ? "blokkin heldur staðalvikunni" : "blokkin stigmagnast"}; niðurtröppun eða létt vika sést í töflunni. Lýsandi áætlun — aldrei readiness-liturinn.` : `Match-anchored: each KPI = match value × its OWN weekly multiple — HSR/sprint accumulate a lower multiple than distance (training days hold a smaller share of the match in high-speed running than in distance; Stevens 2017). The week undulates around MD (MD-4 heaviest); ${blkHold ? "the block holds the standard week" : "the block ramps"}; any deload or light week shows in the table. Descriptive plan — never the readiness colour.`}</p>
+                    ) : <p className="mt-2 text-[12px] text-amber-700">{is ? "Ekkert leikvið (GPS) enn — sýni sRPE-álag annars staðar." : "No GPS match unit yet — sRPE load is shown elsewhere."}</p>}
+
+                    {/* What the columns mean — visible, no click (same wording as the pre-season table). */}
+                    <ul className="mt-2 space-y-0.5 text-[11.5px] text-slate-600">
+                      <li><b className="font-semibold text-slate-700">{is ? "× leikur" : "× a match"}</b> — {is ? "vikan samanlagt deilt með einum leik í sömu breytu. 2× = tvöfalt það sem einn leikur gefur." : "the week's total divided by one match in the same variable. 2× = twice what one match gives."}</li>
+                      <li><b className="font-semibold text-slate-700">{is ? "Rannsóknir" : "Research"}</b> — {is ? "æfing:leikur í venjulegri æfingaviku á keppnistímabili (training:match, PMC6747517). Merkið segir hvort talan er innan, yfir eða undir bilinu." : "training:match in a normal in-season training week (training:match, PMC6747517). The mark says whether the number is within, above or below the range."}</li>
+                    </ul>
+
+                    {weeksDiffer && (
+                      <details className="mt-3" open>
+                        <summary className="cursor-pointer text-[12px] font-semibold text-[#2740e6]">{is ? `Viku fyrir viku — ${blkWeeks} vikur` : `Week by week — ${blkWeeks} weeks`}</summary>
+                        <div className="mt-1.5 overflow-x-auto">
+                          <table className="w-full text-[12.5px]">
+                            <thead><tr className="text-left text-[10px] uppercase tracking-wide text-slate-400">
+                              <th className="py-1 pr-2 font-medium">{is ? "Vika" : "Week"}</th><th className="py-1 px-2 text-right font-medium" title={is ? "Rúmmál (vegalengd/PlayerLoad)" : "Volume (distance/PlayerLoad)"}>× {is ? "leikur" : "a match"}</th>
+                              {headKeys.map((k) => <th key={k} className="py-1 px-2 text-right font-medium">{is ? WEEKLY_LOAD_LABELS[k].is : WEEKLY_LOAD_LABELS[k].en} <span className="normal-case text-slate-300">(× {is ? "leikur" : "a match"})</span></th>)}
+                            </tr></thead>
+                            <tbody>
+                              {meso.map((w) => (
+                                <tr key={w.weekIndex} className="border-t border-slate-100">
+                                  <td className="py-1.5 pr-2 text-slate-700">{is ? "Vika" : "Wk"} {w.weekIndex}{w.isDeload ? <span className="ml-1 rounded bg-[#de9328]/15 px-1 py-0.5 text-[9px] font-semibold uppercase text-[#8a5a10]">{w.isLight ? (is ? "létt" : "light") : is ? "niður" : "deload"}</span> : null}</td>
+                                  <td className="py-1.5 px-2 text-right tabular-nums font-semibold text-slate-900">{fx(w.multiple)}×</td>
+                                  {headKeys.map((k) => { const val = mesoKpi(k, w); return <td key={k} className="py-1.5 px-2 text-right tabular-nums text-slate-600">{val == null ? "–" : <><span className="font-semibold text-slate-800">{fx(kpiWkMult(k, w))}×</span> <span className="text-slate-400">{fmtK(val)}{WEEKLY_LOAD_LABELS[k].unit}</span></>}</td>; })}
+                                </tr>
+                              ))}
+                              <tr className="border-t-2 border-slate-300 font-semibold">
+                                <td className="py-1.5 pr-2">{is ? "Lotan alls" : "Block total"}</td>
+                                <td className="py-1.5 px-2 text-right tabular-nums text-slate-900">{fx(blockTotal)}×</td>
+                                {headKeys.map((k) => { const mv = matchKpis[k]; const totMult = Math.round(meso.reduce((s2, w) => s2 + kpiWkMult(k, w), 0) * 100) / 100; const tot = meso.reduce((s2, w) => s2 + (mesoKpi(k, w) ?? 0), 0); return <td key={k} className="py-1.5 px-2 text-right tabular-nums text-slate-700">{mv == null ? "–" : <><span className="font-semibold text-slate-900">{fx(totMult)}×</span> <span className="text-slate-400">{fmtK(tot)}{WEEKLY_LOAD_LABELS[k].unit}</span></>}</td>; })}
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </details>
+                    )}
+                    <p className="mt-2 text-[10px] text-slate-500">{is ? "Hver breyta hefur sitt eigið vikumargfeldi: háhraði og sprettir safnast í lægra margfeldi en vegalengd, því æfingadagar ná minna hlutfalli af leik í háhraða en í vegalengd (Stevens 2017). Vikan bylgjast um leikinn, MD-4 þyngst (Martín-García 2018; hlutföll MD-daga eru val MicroPulse). Lýsandi áætlun — aldrei readiness-liturinn." : "Each variable has its own weekly multiple: high-speed running and sprints add up to a lower multiple than distance, because training days hold a smaller share of the match in high-speed running than in distance (Stevens 2017). The week undulates around the match, MD-4 heaviest (Martín-García 2018; the MD-day shares are MicroPulse's). Descriptive plan — never the readiness colour."}</p>
                   </div>
                 </details>
               );
             })()}
-          {/* THE SQUAD — team overview: how the block lands on each player; a row opens him in the Players tab. */}
-          {(() => {
-            const h2c = "text-[15px] font-bold text-slate-900";
-            const plist = plan.players;
-            const bvDays = standardTrainingDays(1);
-            const bvWkMult = weeklyTrainingMultiple(bvDays);
-            const fmtKv = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)));
-            return (
-          <section className={card}>
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <h2 className={h2c}>{is ? "Allur hópurinn" : "The whole squad"}</h2>
-              <span className="text-[12px] text-slate-500">{is ? "Smelltu á leikmann til að opna hann í Leikmenn-flipanum." : "Click a player to open him in the Players tab."}</span>
-            </div>
-            <p className="mt-1 text-[12px] text-slate-500">{is ? "Grunnur (nýleg þjálfun, síð. 28 d — hvar leikmaðurinn er núna) → leik-mark (krafan per leik) → vikumark (áætlað vikuálag, leik-PL × vikumargfeldi ~2,35×)." : "Baseline (recent training, last 28d — where each player is now) → match target (per-match demand) → week target (planned weekly load, match PL × the weekly multiple ~2.35×)."}</p>
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full min-w-[1040px] text-[13px]">
-                <thead><tr className="text-left text-[11px] text-slate-500">
-                  <th className="py-1.5 pr-2 font-semibold">{is ? "Leikmaður" : "Player"}</th>
-                  <th className="py-1.5 pr-2 font-semibold">{is ? "Staða" : "Position"}</th>
-                  <th className="py-1.5 px-2 text-right font-semibold">{is ? "Grunnur /æf (%leik)" : "Baseline /sess (%match)"}</th>
-                  <th className="py-1.5 px-2 text-right font-semibold">{is ? "Leik-mark" : "Match target"}</th>
-                  <th className="py-1.5 px-2 text-right font-semibold">{is ? "Vika PL" : "Week PL"}</th>
-                  <th className="py-1.5 pr-2 text-right font-semibold" title={is ? "Hversu mikið æfingar eru lækkaðar þessa viku eftir lágt hoppróf síðustu 7 daga. Aðrar vikur og leikir breytast ekki." : "How much training is trimmed this week after a low jump test in the last 7 days. Other weeks and matches don't change."}>{is ? "VALD þessa viku" : "VALD this week"}</th>
-                  <th className="py-1.5 pr-2 text-right font-semibold">{is ? "Mín./leik" : "Min/match"}</th>
-                  <th className="py-1.5 pr-2 text-right font-semibold">MAS</th>
-                  <th className="py-1.5 pl-2 font-semibold">{is ? "Gögn" : "Data"}</th>
-                </tr></thead>
-                <tbody>
-                  {plist.map((p) => {
-                    const cap = p.vald.capPct; const am = p.recentMinutesAvg;
-                    const gk = /GK|MARK|KEEP/i.test(p.position ?? ""); const mu = p.matchUnit.load.typical; const bpl = p.recentBaseline?.playerLoad ?? null;
-                    const pctM = bpl != null && mu != null && mu > 0 ? Math.round((bpl / mu) * 100) : null; const wk = mu != null ? Math.round(mu * bvWkMult) : null;
-                    const pctColor = pctM == null ? "" : pctM >= 100 ? "text-[#15603a]" : pctM >= 60 ? "text-slate-600" : "text-[#7a5210]";
-                    const gaps = p.gaps.filter((g) => g.severity !== "ok").length;
-                    const on = p.playerId === selId;
-                    return (
-                      <tr key={p.playerId} onClick={() => { setSelId(p.playerId); setTab("players"); }} className={`cursor-pointer border-t border-slate-100 hover:bg-slate-50 ${on ? "bg-[#2740e6]/[0.06]" : ""}`}>
-                        <td className="py-2 pr-2"><button type="button" onClick={(e) => { e.stopPropagation(); setSelId(p.playerId); setTab("players"); }} aria-pressed={on} className="text-left font-semibold text-slate-900 hover:underline">{p.name}</button></td>
-                        <td className="py-2 pr-2 text-slate-600">{p.position ?? "–"}</td>
-                        <td className="py-2 px-2 text-right tabular-nums">{bpl != null ? <>{fmtKv(bpl)} PL{pctM != null && <span className={`ml-1 font-semibold ${pctColor}`}>({pctM}%)</span>}</> : <span className="text-slate-500">{is ? "– engin GPS" : "– no GPS"}</span>}</td>
-                        <td className="py-2 px-2 text-right tabular-nums text-slate-600">{gk ? (is ? "sérlíkan" : "GK model") : mu != null ? <>{mu} PL{p.matchUnit.hsr.typical != null ? ` · ${Math.round(p.matchUnit.hsr.typical)}m` : ""}{p.matchUnit.distance.typical != null ? ` · ${(p.matchUnit.distance.typical / 1000).toFixed(1)}km` : ""} <span className="text-slate-500">n{p.matchUnit.nNearFull}{p.matchUnit.confidence !== "high" ? ` (${p.matchUnit.confidence})` : ""}</span></> : "–"}</td>
-                        <td className="py-2 px-2 text-right tabular-nums font-bold text-[#2740e6]">{gk ? "–" : wk != null ? fmtKv(wk) : "–"}</td>
-                        <td className="py-2 pr-2 text-right tabular-nums" title={is ? p.vald.note.is : p.vald.note.en}>{cap != null && cap < 100 ? (p.vald.lift ? <span className="text-slate-500">{is ? "hnekkt" : "lifted"}</span> : <span className={`rounded px-1.5 py-0.5 text-[12px] font-semibold ${cap >= 85 ? "bg-amber-100 text-amber-800" : "bg-rose-100 text-rose-800"}`}>−{100 - cap}%</span>) : <span className="text-slate-500">–</span>}</td>
-                        <td className="py-2 pr-2 text-right tabular-nums text-slate-600">{am == null ? "–" : `${am}′`}</td>
-                        <td className="py-2 pr-2 text-right tabular-nums text-slate-600">{p.masKmh != null ? p.masKmh : "–"}</td>
-                        <td className={`py-2 pl-2 ${gaps ? "text-amber-800" : "text-emerald-700"}`}>{gaps ? (is ? `${gaps} vantar` : `${gaps} missing`) : (is ? "Í lagi" : "OK")}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <p className="mt-2 text-[12px] text-slate-500">{is ? "Grunnur = meðal-PL per þjálfunaræfingu síðustu 28 daga (grænt ≥100% af leik, gult <60%). Leik-mark = miðgildi næstum-heilla leikja. MAS = loftháða vélin. Lýsandi — aldrei readiness-liturinn." : "Baseline = mean PL per training session over the last 28 days (green ≥100% of a match, amber <60%). Match target = median of near-full matches. MAS = the aerobic engine. Descriptive — never the readiness colour."}</p>
-            </section>
-            );
-          })()}
           {/* 4 — MESO → MICRO handoff */}
           <section className={`${card} flex flex-wrap items-center gap-3`}>
             <div className="min-w-0 flex-[1_1_320px]">
@@ -3982,6 +3952,61 @@ export default function PeriodizationHubPage() {
             {playerBlock && <button type="button" onClick={exportPlayerBlock} className="h-10 rounded-lg border border-[#2740e6] bg-white px-3.5 text-[13px] font-bold text-[#2740e6] hover:bg-[#2740e6]/5">{is ? "Lota leikmanns (PDF)" : "Player block (PDF)"}</button>}
           </section>
 
+          {/* THE WHOLE SQUAD — compare players side by side and pick one (moved here from Meso: In-season 2026-11-26). */}
+          {(() => {
+            const h2c = "text-[15px] font-bold text-slate-900";
+            const bvDays = standardTrainingDays(1);
+            const bvWkMult = weeklyTrainingMultiple(bvDays);
+            const fmtKv = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v)));
+            return (
+          <details className={card}>
+            <summary className="cursor-pointer">
+              <span className={h2c}>{is ? `Allur hópurinn (${plist.length} leikmenn) — bera saman og velja` : `The whole squad (${plist.length} players) — compare and pick`}</span>
+              <span className="ml-2 text-[12px] text-slate-500">{is ? "Smelltu á leikmann til að velja hann." : "Click a player to select."}</span>
+            </summary>
+            <p className="mt-1 text-[12px] text-slate-500">{is ? "Grunnur (nýleg þjálfun, síð. 28 d — hvar leikmaðurinn er núna) → leik-mark (krafan per leik) → vikumark (áætlað vikuálag, leik-PL × vikumargfeldi ~2,35×)." : "Baseline (recent training, last 28d — where each player is now) → match target (per-match demand) → week target (planned weekly load, match PL × the weekly multiple ~2.35×)."}</p>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[1040px] text-[13px]">
+                <thead><tr className="text-left text-[11px] text-slate-500">
+                  <th className="py-1.5 pr-2 font-semibold">{is ? "Leikmaður" : "Player"}</th>
+                  <th className="py-1.5 pr-2 font-semibold">{is ? "Staða" : "Position"}</th>
+                  <th className="py-1.5 px-2 text-right font-semibold">{is ? "Grunnur /æf (%leik)" : "Baseline /sess (%match)"}</th>
+                  <th className="py-1.5 px-2 text-right font-semibold">{is ? "Leik-mark" : "Match target"}</th>
+                  <th className="py-1.5 px-2 text-right font-semibold">{is ? "Vika PL" : "Week PL"}</th>
+                  <th className="py-1.5 pr-2 text-right font-semibold" title={is ? "Hversu mikið æfingar eru lækkaðar þessa viku eftir lágt hoppróf síðustu 7 daga. Aðrar vikur og leikir breytast ekki." : "How much training is trimmed this week after a low jump test in the last 7 days. Other weeks and matches don't change."}>{is ? "VALD þessa viku" : "VALD this week"}</th>
+                  <th className="py-1.5 pr-2 text-right font-semibold">{is ? "Mín./leik" : "Min/match"}</th>
+                  <th className="py-1.5 pr-2 text-right font-semibold">MAS</th>
+                  <th className="py-1.5 pl-2 font-semibold">{is ? "Gögn" : "Data"}</th>
+                </tr></thead>
+                <tbody>
+                  {plist.map((p) => {
+                    const cap = p.vald.capPct; const am = p.recentMinutesAvg;
+                    const gk = /GK|MARK|KEEP/i.test(p.position ?? ""); const mu = p.matchUnit.load.typical; const bpl = p.recentBaseline?.playerLoad ?? null;
+                    const pctM = bpl != null && mu != null && mu > 0 ? Math.round((bpl / mu) * 100) : null; const wk = mu != null ? Math.round(mu * bvWkMult) : null;
+                    const pctColor = pctM == null ? "" : pctM >= 100 ? "text-[#15603a]" : pctM >= 60 ? "text-slate-600" : "text-[#7a5210]";
+                    const gaps = p.gaps.filter((g) => g.severity !== "ok").length;
+                    const on = p.playerId === selId;
+                    return (
+                      <tr key={p.playerId} onClick={() => setSelId(p.playerId)} className={`cursor-pointer border-t border-slate-100 hover:bg-slate-50 ${on ? "bg-[#2740e6]/[0.06]" : ""}`}>
+                        <td className="py-2 pr-2"><button type="button" onClick={(e) => { e.stopPropagation(); setSelId(p.playerId); }} aria-pressed={on} className="text-left font-semibold text-slate-900 hover:underline">{p.name}</button></td>
+                        <td className="py-2 pr-2 text-slate-600">{p.position ?? "–"}</td>
+                        <td className="py-2 px-2 text-right tabular-nums">{bpl != null ? <>{fmtKv(bpl)} PL{pctM != null && <span className={`ml-1 font-semibold ${pctColor}`}>({pctM}%)</span>}</> : <span className="text-slate-500">{is ? "– engin GPS" : "– no GPS"}</span>}</td>
+                        <td className="py-2 px-2 text-right tabular-nums text-slate-600">{gk ? (is ? "sérlíkan" : "GK model") : mu != null ? <>{mu} PL{p.matchUnit.hsr.typical != null ? ` · ${Math.round(p.matchUnit.hsr.typical)}m` : ""}{p.matchUnit.distance.typical != null ? ` · ${(p.matchUnit.distance.typical / 1000).toFixed(1)}km` : ""} <span className="text-slate-500">n{p.matchUnit.nNearFull}{p.matchUnit.confidence !== "high" ? ` (${p.matchUnit.confidence})` : ""}</span></> : "–"}</td>
+                        <td className="py-2 px-2 text-right tabular-nums font-bold text-[#2740e6]">{gk ? "–" : wk != null ? fmtKv(wk) : "–"}</td>
+                        <td className="py-2 pr-2 text-right tabular-nums" title={is ? p.vald.note.is : p.vald.note.en}>{cap != null && cap < 100 ? (p.vald.lift ? <span className="text-slate-500">{is ? "hnekkt" : "lifted"}</span> : <span className={`rounded px-1.5 py-0.5 text-[12px] font-semibold ${cap >= 85 ? "bg-amber-100 text-amber-800" : "bg-rose-100 text-rose-800"}`}>−{100 - cap}%</span>) : <span className="text-slate-500">–</span>}</td>
+                        <td className="py-2 pr-2 text-right tabular-nums text-slate-600">{am == null ? "–" : `${am}′`}</td>
+                        <td className="py-2 pr-2 text-right tabular-nums text-slate-600">{p.masKmh != null ? p.masKmh : "–"}</td>
+                        <td className={`py-2 pl-2 ${gaps ? "text-amber-800" : "text-emerald-700"}`}>{gaps ? (is ? `${gaps} vantar` : `${gaps} missing`) : (is ? "Í lagi" : "OK")}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-2 text-[12px] text-slate-500">{is ? "Grunnur = meðal-PL per þjálfunaræfingu síðustu 28 daga (grænt ≥100% af leik, gult <60%). Leik-mark = miðgildi næstum-heilla leikja. MAS = loftháða vélin. Lýsandi — aldrei readiness-liturinn." : "Baseline = mean PL per training session over the last 28 days (green ≥100% of a match, amber <60%). Match target = median of near-full matches. MAS = the aerobic engine. Descriptive — never the readiness colour."}</p>
+            </details>
+            );
+          })()}
           {player && (<>
           {/* 2 — VERDICT + four facts */}
           <section className="space-y-3">
@@ -4600,8 +4625,8 @@ export default function PeriodizationHubPage() {
           </section>
           </>)}
 
-          {/* Whole-squad overview + the team plan moved to their tabs — this stays per-player. */}
-          <p className="text-[12px] text-slate-500">{is ? "Allur hópurinn og liðs-ramminn sem þessi blokk situr inni í eru á " : "The whole-squad overview and the team plan this block sits inside are on the "}<a href="?tab=plan" onClick={(e) => { e.preventDefault(); setTab("plan"); }} className="font-semibold text-[#2740e6] hover:underline">{is ? "Meso-lota" : "Meso tab"}</a> · <a href="?tab=preseason" onClick={(e) => { e.preventDefault(); setTab("preseason"); }} className="font-semibold text-[#2740e6] hover:underline">{is ? "Undirbúningur" : "Pre-season"}</a></p>
+          {/* The team plan lives on its tabs — this stays per-player (the whole-squad table is at the top of this tab). */}
+          <p className="text-[12px] text-slate-500">{is ? "Liðs-ramminn sem þessi blokk situr inni í er á " : "The team plan this block sits inside is on the "}<a href="?tab=plan" onClick={(e) => { e.preventDefault(); setTab("plan"); }} className="font-semibold text-[#2740e6] hover:underline">{is ? "Meso-lota" : "Meso tab"}</a> · <a href="?tab=preseason" onClick={(e) => { e.preventDefault(); setTab("preseason"); }} className="font-semibold text-[#2740e6] hover:underline">{is ? "Undirbúningur" : "Pre-season"}</a></p>
 
           {/* BRIDGE / OFF-WEEK maintenance plan — per-player running + strength from HIS own data, for a
               season-end / national-team window. Scoped to the selected player or the whole squad; sends to

@@ -14,6 +14,7 @@
 import * as React from "react";
 import { CiteRefs } from "@/components/coach/CiteRefs";
 import { kpiTmRefRange, kpiReentryFloor } from "@/lib/micropulse/periodization/plannedVolume";
+import { tmRefBand } from "@/lib/micropulse/periodization/matchReference";
 import { PRESEASON_DEFAULT_WEEK1, PRESEASON_TAPER_RESEARCH } from "@/lib/micropulse/periodization/preseasonWindow";
 import type { PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
@@ -88,13 +89,7 @@ export default function PreseasonWeek1Table({ is, ramp, kpiKeys, proposal, match
   const reset = (k: string) => (k === "totalPlayerLoad" ? onWeek1Mult(PRESEASON_DEFAULT_WEEK1) : onKpi(k, null));
 
   // Read against research — always a word, never a colour alone.
-  const band = (x: number | null, ref: [number, number] | null) => {
-    if (x == null || ref == null) return null;
-    const k = x < ref[0] ? "below" : x > ref[1] ? "above" : "in";
-    const txt = k === "in" ? t({ en: "within", is: "innan" }) : k === "above" ? t({ en: "above", is: "yfir" }) : t({ en: "below", is: "undir" });
-    const cls = k === "in" ? "bg-[#1c7a4a]/10 text-[#1c7a4a]" : k === "above" ? "bg-[#de9328]/15 text-[#8a5a10]" : "bg-slate-100 text-slate-600";
-    return <span className={`ml-1 rounded px-1 py-px text-[10px] font-semibold ${cls}`}>{txt}</span>;
-  };
+  const band = (x: number | null, ref: [number, number] | null) => <TmBandChip x={x} refRange={ref} is={is} />;
   const startRule = (k: string) => {
     if (k === "totalPlayerLoad") return t({ en: `Proposal ${fx(PRESEASON_DEFAULT_WEEK1)}× a match.`, is: `Tillaga ${fx(PRESEASON_DEFAULT_WEEK1)}× leik.` });
     const f = kpiReentryFloor(k);
@@ -208,4 +203,14 @@ function Week1Input({ value, label, onCommit }: { value: number | null; label: s
       onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
       className="h-7 w-[4.5rem] rounded border border-slate-300 bg-white px-1.5 tabular-nums" />
   );
+}
+
+/** Where a weekly ×match lands against the research training:match range — always a word, never a colour alone.
+ *  Shared with the in-season "weekly volume" table in the Periodization Hub. */
+export function TmBandChip({ x, refRange, is }: { x: number | null | undefined; refRange: [number, number] | null | undefined; is: boolean }) {
+  const k = tmRefBand(x, refRange);
+  if (k == null) return null;
+  const txt = k === "in" ? (is ? "innan" : "within") : k === "above" ? (is ? "yfir" : "above") : (is ? "undir" : "below");
+  const cls = k === "in" ? "bg-[#1c7a4a]/10 text-[#1c7a4a]" : k === "above" ? "bg-[#de9328]/15 text-[#8a5a10]" : "bg-slate-100 text-slate-600";
+  return <span className={`ml-1 rounded px-1 py-px text-[10px] font-semibold ${cls}`}>{txt}</span>;
 }
