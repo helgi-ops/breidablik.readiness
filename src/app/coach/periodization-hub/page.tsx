@@ -557,9 +557,9 @@ export default function PeriodizationHubPage() {
   const blkStepEff = blkHold ? 0 : blkStep;
   const blkMesoDeload = React.useMemo((): { deloadWeek: number | null; light?: boolean } => {
     if (!blkDeload) return { deloadWeek: cadence };
-    const wi = deloadWeekIndex(mondayOf(blkStart), blkDeload.weekStart, blkWeeks);
+    const wi = deloadWeekIndex(mondayOf(blkStart), blkDeload.weekStart, blkWeeksEff);
     return { deloadWeek: wi == null ? null : wi + 1, light: blkDeload.light };
-  }, [blkDeload, blkStart, blkWeeks, cadence]);
+  }, [blkDeload, blkStart, blkWeeksEff, cadence]);
 
   // The cadence is the DEFAULT block length; the calendar renders the SELECTED block's own length
   // (`blkWeeksEff`, clamped to the block end), so a competitive block stops at the season boundary and
@@ -721,9 +721,9 @@ export default function PeriodizationHubPage() {
   const blkMatchUnit = blkScope === "player" ? (player?.matchUnit.load.typical ?? plan?.matchLoad ?? null) : (plan?.matchLoad ?? null);
   const mesoPlan: MesoPlan | null = React.useMemo(() => {
     if (!plan || !blkPos || !blkStart) return null;
-    return buildMesoPlan({ startDate: blkStart, numWeeks: blkWeeks, sessionsPerWeek: blkSessions, baseline: blkPos.avg as unknown as TeamAverages, mdShape: plan.mdShape, fixtures: plan.fixtures ?? [], matchUnitLoad: blkMatchUnit, baseOverloadPct: blkBase, stepPct: blkStep, goal: BLK_GOALS[effectiveGoal], inSeason: inSeasonRange(plan.phases) });
+    return buildMesoPlan({ startDate: blkStart, numWeeks: blkWeeksEff, sessionsPerWeek: blkSessions, baseline: blkPos.avg as unknown as TeamAverages, mdShape: plan.mdShape, fixtures: plan.fixtures ?? [], matchUnitLoad: blkMatchUnit, baseOverloadPct: blkBase, stepPct: blkStep, goal: BLK_GOALS[effectiveGoal], inSeason: inSeasonRange(plan.phases) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan, blkPos, blkStart, blkWeeks, blkSessions, blkBase, blkStep, effectiveGoal, blkMatchUnit]);
+  }, [plan, blkPos, blkStart, blkWeeksEff, blkSessions, blkBase, blkStep, effectiveGoal, blkMatchUnit]);
 
   // The scope's match unit (absolute) — a player's own near-full match, else the squad's match average.
   const isPlayerScope = blkScope === "player" && !!player;
@@ -790,8 +790,8 @@ export default function PeriodizationHubPage() {
 
   // Seed a FULL 6-week skeleton (MESO_HORIZON) from the auto layout + the coach's saved day edits +
   // real fixtures whenever the block window or scope changes. Always seeding 6 weeks (regardless of the
-  // current cadence) is what makes a cadence switch a pure trim: the grid renders only `blkWeeks` of
-  // this skeleton, so 6→4→5 shows the same first weeks and never reshuffles. NB: NOT keyed on blkWeeks
+  // current cadence) is what makes a cadence switch a pure trim: the grid renders only `blkWeeksEff` of
+  // this skeleton, so 6→4→5 shows the same first weeks and never reshuffles. NB: NOT keyed on blkWeeksEff
   // — a cadence change must not re-seed (that would wipe unsaved edits); it only changes how many weeks
   // render.
   React.useEffect(() => {
@@ -1237,18 +1237,18 @@ export default function PeriodizationHubPage() {
     const curBlock = curIdx >= 0 ? mesoBlocks[curIdx] : mesoBlocks[0] ?? null;
     const prevBlock = curIdx > 0 ? mesoBlocks[curIdx - 1] : null;
     const phaseKey = plan.phases.find((ph) => ph.start <= blkStart && blkStart < ph.end)?.key as "preseason" | "competitive" | "offseason" | undefined;
-    const startMs = Date.parse(blkStart), endMs = startMs + blkWeeks * 7 * 86_400_000;
+    const startMs = Date.parse(blkStart), endMs = startMs + blkWeeksEff * 7 * 86_400_000;
     const fx = (plan.fixtures ?? []).map((f) => Date.parse(f));
     const future = fx.filter((ms) => ms >= startMs).sort((a, b) => a - b);
     const weeksToNextFixture = future.length ? Math.max(0, Math.round((future[0] - startMs) / (7 * 86_400_000))) : null;
     const inWin = fx.filter((ms) => ms >= startMs && ms < endMs).length;
     return recommendBlockGoal({
-      phaseKey: phaseKey ?? null, weeksToNextFixture, matchesPerWeek: blkWeeks > 0 ? inWin / blkWeeks : null,
+      phaseKey: phaseKey ?? null, weeksToNextFixture, matchesPerWeek: blkWeeksEff > 0 ? inWin / blkWeeksEff : null,
       deloadNow: !!curBlock?.deloadNow, deloadReason: curBlock?.flag ?? null,
       prevGoal: prevBlock ? gk(prevBlock.phase.en) : null,
       fixturesLoaded: (plan.fixtures ?? []).length, loadHistoryWeeks: (plan.loadCurve ?? []).length,
     });
-  }, [plan, mesoBlocks, blkStart, blkWeeks]);
+  }, [plan, mesoBlocks, blkStart, blkWeeksEff]);
   const recTint = (c: "high" | "medium" | "low") => (c === "high" ? "bg-emerald-100 text-emerald-700" : c === "medium" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500");
 
   async function exportBlock() {
@@ -1336,8 +1336,8 @@ export default function PeriodizationHubPage() {
       : null;
     // Planned KPI volume (week + meso), match-anchored + per-KPI tapered — team scope, with head-KPI labels.
     // Per-week match count from fixtures → the meso's weekly TOTAL is congestion-aware week by week.
-    const pvMatchesByWeek = matchesPerWeek(blkStart, blkWeeks, plan.fixtures ?? []);
-    const pv = buildPlannedVolume({ matchKpiAvg: teamKpiAvg(plan.players), numWeeks: blkWeeks, stepPct: blkStepEff, ...blkMesoDeload, matchesByWeek: pvMatchesByWeek });
+    const pvMatchesByWeek = matchesPerWeek(blkStart, blkWeeksEff, plan.fixtures ?? []);
+    const pv = buildPlannedVolume({ matchKpiAvg: teamKpiAvg(plan.players), numWeeks: blkWeeksEff, stepPct: blkStepEff, ...blkMesoDeload, matchesByWeek: pvMatchesByWeek });
     const plannedVolume = pv ? {
       weekVolumeMultiple: pv.weekVolumeMultiple,
       matches: pv.matches, weekTotalMultiple: pv.weekTotalMultiple,
@@ -3054,13 +3054,13 @@ export default function PeriodizationHubPage() {
             // reads this tab always used (blockVolumeView = the old inline maths; the calendar block's own week sums).
             const view = blockVolumeView({
               matchKpis: blkScope === "player" && player ? kpiAvgFromUnit(player.matchUnit) : teamKpiAvg(plan.players),
-              numWeeks: blkWeeks, stepPct: blkStepEff, deloadWeek: blkMesoDeload.deloadWeek, light: blkMesoDeload.light,
+              numWeeks: blkWeeksEff, stepPct: blkStepEff, deloadWeek: blkMesoDeload.deloadWeek, light: blkMesoDeload.light,
             });
             const oneMatchNote: Bi = blkScope === "player" && player
               ? { en: `One match = ${player.name}'s typical full match. ${player.matchUnit.windowNote.en}`, is: `Einn leikur = dæmigerður heill leikur ${player.name}. ${player.matchUnit.windowNote.is}` }
               : teamMatchReference(plan.players.map((p) => p.matchUnit)).note;
             const fxN = (n: number) => (is ? String(n).replace(".", ",") : String(n));
-            const calWeeks = Array.from({ length: blkWeeks }, (_, i) => mesoCalBlock?.weeks[i] ?? null);
+            const calWeeks = Array.from({ length: blkWeeksEff }, (_, i) => mesoCalBlock?.weeks[i] ?? null);
             const weekMults = calWeeks.map((w) => calWeekMultiple(w));
             const sessMM = minMax(calWeeks.map((w) => (w ? sessionsInWeek(w) : null)));
             const loadMM = minMax(weekMults);
@@ -3244,7 +3244,7 @@ export default function PeriodizationHubPage() {
               <summary className="cursor-pointer select-none font-medium text-slate-600 hover:text-slate-800">{is ? "Fleiri stillingar (upphaf, vikur, grunn-álag)" : "More block settings (start, weeks, base load)"}</summary>
               <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <label className="flex min-w-0 flex-col gap-1.5 text-[12px] font-medium text-slate-700">{is ? "Upphaf" : "Start"}<input type="date" value={blkStart} onChange={(e) => setBlkStart(e.target.value)} className="h-11 rounded-lg border border-[#d6d3cc] bg-white px-3 text-[14px] font-normal tabular-nums" /></label>
-                <div className="flex min-w-0 flex-col gap-1.5 text-[12px] font-medium text-slate-700">{is ? "Vikur (úr Makró)" : "Weeks (from Macro)"}<div className="flex h-11 items-center rounded-lg border border-[#e3e0d8] bg-[#f8f7f3] px-3 text-[14px] font-normal text-slate-700">{blkWeeks}{!activeBlock?.inSeason && <span className="ml-1 text-[12px] text-slate-500">· {is ? "niðurtr. hverja" : "deload every"} {cadence}</span>}</div></div>
+                <div className="flex min-w-0 flex-col gap-1.5 text-[12px] font-medium text-slate-700">{is ? "Vikur (úr Makró)" : "Weeks (from Macro)"}<div className="flex h-11 items-center rounded-lg border border-[#e3e0d8] bg-[#f8f7f3] px-3 text-[14px] font-normal text-slate-700">{blkWeeksEff}{!activeBlock?.inSeason && <span className="ml-1 text-[12px] text-slate-500">· {is ? "niðurtr. hverja" : "deload every"} {cadence}</span>}</div></div>
                 <label className="flex min-w-0 flex-col gap-1.5 text-[12px] font-medium text-slate-700">{is ? "Grunn-álag %" : "Base overload %"}<input type="number" min={80} max={130} value={blkBase} onChange={(e) => setBlkBase(Number(e.target.value))} className="h-11 rounded-lg border border-[#d6d3cc] bg-white px-3 text-[14px] font-normal tabular-nums" /></label>
               </div>
               <p className="mt-2">{is ? "Leikir og frí eru sett í Makró-lotu." : "Games and breaks are set in the Macro cycle."}{" "}<button type="button" onClick={() => setTab("season")} className="font-semibold text-[#2740e6] hover:underline">{is ? "Opna Makró →" : "Open Macro →"}</button></p>
@@ -3252,7 +3252,7 @@ export default function PeriodizationHubPage() {
 
             {/* The standard week, every variable as × a match beside the research range (read-only mirror of the
                 pre-season "Load per variable" table). */}
-            <InSeasonVariableTable is={is} view={view} oneMatchNote={oneMatchNote} hold={blkHold} numWeeks={blkWeeks} playerName={isPlayerScope ? player?.name ?? null : null} />
+            <InSeasonVariableTable is={is} view={view} oneMatchNote={oneMatchNote} hold={blkHold} numWeeks={blkWeeksEff} playerName={isPlayerScope ? player?.name ?? null : null} />
 
             {/* The block's goal (coach's call; the system recommends) and the tests that fit it. */}
             <div className="mt-2 grid min-w-0 items-start gap-6 lg:grid-cols-2">
@@ -3351,7 +3351,7 @@ export default function PeriodizationHubPage() {
           {/* 3 — WEEK BY WEEK: the mirror of the pre-season week cards. One row per week (the glance); a row opens
               into the week (the days, the rule breaks, the strength, the load per variable behind a toggle). */}
           {blkPopulated.length > 0 && !selIsPre && (() => {
-            const mons = Array.from({ length: blkWeeks }, (_, i) => mesoCalBlock?.weeks[i]?.weekStart ?? isoAdd(calStart, i * 7));
+            const mons = Array.from({ length: blkWeeksEff }, (_, i) => mesoCalBlock?.weeks[i]?.weekStart ?? isoAdd(calStart, i * 7));
             const curIdx = Math.max(0, mons.findIndex((m) => m <= todayIso && todayIso < isoAdd(m, 7)));
             const isOpen = (m: string, k: number) => inOpenWeeks[m] ?? k === curIdx;
             const anyClosed = mons.some((m, k) => !isOpen(m, k));
