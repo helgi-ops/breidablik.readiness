@@ -245,5 +245,5 @@ export function MicroWeekEnough({ is, plan }: { is: boolean; plan: { week: PlanW
   const today = new Date().toISOString().slice(0, 10);
   const enough = React.useMemo(() => (week ? buildWeekEnough({ week, actual: actual.days, today, friendlies }) : null), [week, actual.days, today, friendlies]);
   if (!week || actual.state === "not_available" || actual.state === "error") return null;
-  return <div className="mt-3"><WeekEnoughCard is={is} enough={enough} loading={actual.state === "loading"} /></div>;
+  return <div className="mt-5"><WeekEnoughCard is={is} enough={enough} loading={actual.state === "loading"} /></div>;
 }

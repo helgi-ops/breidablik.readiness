@@ -2055,14 +2055,6 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
         </div>
       )}
 
-      {weekTotalSlot?.(weekStart)}
-
-      {/* How the strength reaches the players (the team's send mode); standard: does a Custom Programme cover the week? */}
-      {teamId && <StrengthDeliveryNote delivery={delivery} season={goalSeasonOfPhase(seasonPhase)} is={isIS} className="mt-3" />}
-      {deliveryStd && deliveryWeek && !programmeCovers(deliveryWeek) && (
-        <p className="mt-1.5 rounded-md border border-[#de9328]/40 bg-[#de9328]/10 px-2.5 py-1.5 text-[12px] text-[#7a5210]">⚠ {isIS ? NO_PROGRAMME.is : NO_PROGRAMME.en}</p>
-      )}
-
       {/* OK / error banner */}
       {error && (
         <div className="mt-4 rounded-[12px] border px-4 py-2.5 text-[13px] font-medium" style={{ borderColor: "rgba(168,62,40,0.35)", background: "rgba(168,62,40,0.08)", color: "#a83e28" }}>
@@ -2152,11 +2144,6 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
           <span className="min-w-6 text-right text-[22px] font-bold tabular-nums" style={archivo}>{intensityTarget}</span>
         </div>
       </section>
-
-      {/* What the coach wants from this week, in their own words → rule-based advice (planIntent/). Football only. */}
-      {!isBasketball && teamId && weekStart && (
-        <div className="mt-5"><PlanIntentCard scope="week" start={weekStart} /></div>
-      )}
 
       {/* 3 — THE WEEK GRID: compact cards (what you decide); click a day to open it below */}
       <section className="mt-5">
@@ -2368,6 +2355,21 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
             })()}
           </div>
         </section>
+      )}
+
+      {/* Below the days (the coach's first look is the week grid, 2026-11-27): did the week do what the plan asked,
+          what the coach wants from it, and how the strength reaches the players. */}
+      {weekTotalSlot?.(weekStart)}
+
+      {/* What the coach wants from this week, in their own words → rule-based advice (planIntent/). Football only. */}
+      {!isBasketball && teamId && weekStart && (
+        <div className="mt-5"><PlanIntentCard scope="week" start={weekStart} /></div>
+      )}
+
+      {/* How the strength reaches the players (the team's send mode); standard: does a Custom Programme cover the week? */}
+      {teamId && <StrengthDeliveryNote delivery={delivery} season={goalSeasonOfPhase(seasonPhase)} is={isIS} className="mt-5" />}
+      {deliveryStd && deliveryWeek && !programmeCovers(deliveryWeek) && (
+        <p className="mt-1.5 rounded-md border border-[#de9328]/40 bg-[#de9328]/10 px-2.5 py-1.5 text-[12px] text-[#7a5210]">⚠ {isIS ? NO_PROGRAMME.is : NO_PROGRAMME.en}</p>
       )}
 
       {/* Pre-season starting load — ties this week's day plan to the controlled re-entry / ramp. */}
