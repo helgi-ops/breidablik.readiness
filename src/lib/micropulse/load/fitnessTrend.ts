@@ -55,8 +55,8 @@ const CAVEAT_SINGLE: Bi = {
   is: "Þróun innan einnar prófgerðar. Breyting umfram dæmigerða skekkju prófsins (SWC) telst upp/niður; innan hennar er stöðugt. Lækkun getur verið afþjálfun, ófullkomin endurheimt, þreyta EÐA mæliskekkja — verð endurprófs, ekki dómur. Lýsandi — snertir aldrei readiness.",
 };
 const CAVEAT_ACROSS: Bi = {
-  en: "MAS pooled across DIFFERENT protocols (VAMEVAL / 4-min run / beep / 30-15) — indicative only, not like-for-like; a within-test trend is more reliable. Descriptive — never touches readiness.",
-  is: "MAS sameinað þvert á ÓLÍKAR prófgerðir (VAMEVAL / 4-mín / bíp / 30-15) — aðeins til viðmiðunar, ekki sambærilegt; þróun innan sömu prófgerðar er áreiðanlegri. Lýsandi — snertir aldrei readiness.",
+  en: "MAS pooled across DIFFERENT protocols (VAMEVAL / 6-min run / beep / 30-15) — indicative only, not like-for-like; a within-test trend is more reliable. Descriptive — never touches readiness.",
+  is: "MAS sameinað þvert á ÓLÍKAR prófgerðir (VAMEVAL / 6-mín / bíp / 30-15) — aðeins til viðmiðunar, ekki sambærilegt; þróun innan sömu prófgerðar er áreiðanlegri. Lýsandi — snertir aldrei readiness.",
 };
 
 function buildRead(metricLabel: Bi, pts: FitnessTrendPoint[], swcPct: number, opts: { lowerIsBetter?: boolean; indicative?: boolean }): FitnessTrendRead {

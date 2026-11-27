@@ -20,11 +20,11 @@
 import type { Bi, Confidence } from "./peakPeriod";
 import { computeAnaerobicSpeedReserve } from "./criticalSpeed";
 
-export type MasSource = "vameval" | "msft" | "run_4min" | "vift_shrunk" | "cs_backcalc";
+export type MasSource = "vameval" | "msft" | "run_6min" | "run_4min" | "vift_shrunk" | "cs_backcalc";
 export type MssSource = "sprint_test" | "gps_season_max";
 
 /** MAS sources that are a direct incremental/field test (not a shrunk or back-calculated proxy). */
-const MAS_DIRECT: ReadonlySet<MasSource> = new Set<MasSource>(["vameval", "msft", "run_4min"]);
+const MAS_DIRECT: ReadonlySet<MasSource> = new Set<MasSource>(["vameval", "msft", "run_6min", "run_4min"]);
 /** MAS sources that are proxies — always drop confidence to low. */
 const MAS_PROXY: ReadonlySet<MasSource> = new Set<MasSource>(["vift_shrunk", "cs_backcalc"]);
 

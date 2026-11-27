@@ -11,7 +11,7 @@
 
 import { FITNESS_TESTS, isFitnessTestType, type FitnessTestType } from "@/lib/micropulse/load/fitnessTests";
 import type { MasSource } from "@/lib/micropulse/load/speedZones";
-import { isAerobicMode } from "./testingSchedule";
+import { aerobicModeOf } from "./testingSchedule";
 
 type Bi = { en: string; is: string };
 
@@ -20,6 +20,7 @@ export function masSourceLabel(source: MasSource): { label: Bi; estimated: boole
   switch (source) {
     case "vameval": return { label: FITNESS_TESTS.mas_vameval.label, estimated: false };
     case "msft": return { label: FITNESS_TESTS.msft_beep.label, estimated: false };
+    case "run_6min": return { label: FITNESS_TESTS.mas_run_6min.label, estimated: false };
     case "run_4min": return { label: FITNESS_TESTS.mas_run_4min.label, estimated: false };
     case "vift_shrunk": return { label: FITNESS_TESTS.ift_30_15.label, estimated: true };
     case "cs_backcalc": return { label: { en: "Critical Speed", is: "Critical Speed" }, estimated: true };
@@ -57,7 +58,7 @@ export function latestTestsByPlayer(rows: TestRow[]): Map<string, LatestTest[]> 
 
 /** Date of the freshest aerobic test of any kind (one of the six aerobic tests, or a running-test MAS). */
 export function freshestAerobicDate(tests: LatestTest[], otherDates: Array<string | null | undefined> = []): string | null {
-  const dates = [...tests.filter((t) => isAerobicMode(t.type)).map((t) => t.date), ...otherDates.filter((d): d is string => !!d)];
+  const dates = [...tests.filter((t) => aerobicModeOf(t.type) != null).map((t) => t.date), ...otherDates.filter((d): d is string => !!d)];
   if (!dates.length) return null;
   dates.sort();
   return dates[dates.length - 1];

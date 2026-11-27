@@ -10,7 +10,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { loadPeriodization } from "@/lib/micropulse/periodization/loader";
 import { mondayOfIso, nextValdTrimLiftLog, type ValdTrimLift } from "@/lib/micropulse/periodization";
-import { isAerobicMode, DEFAULT_AEROBIC_TEST, type AerobicMode } from "@/lib/micropulse/periodization/testingSchedule";
+import { isAerobicMode, aerobicModeOf, DEFAULT_AEROBIC_TEST, type AerobicMode } from "@/lib/micropulse/periodization/testingSchedule";
 import { writeWeekSetup } from "@/lib/micropulse/periodization/weekSetupWrite";
 import { guardSeasonWindow } from "@/lib/micropulse/periodization/seasonWindowGuard";
 import { cleanAssumedGames, cleanGamesFrom } from "@/lib/micropulse/periodization/preseasonWindow";
@@ -127,11 +127,11 @@ export async function GET(req: Request) {
   }
   // The team's aerobic test (one of the six registry tests). The loaded season's choice wins; otherwise the
   // newest season that set one, so a choice carries over the calendar rollover. Default 30-15 IFT.
-  let aerobicTest: AerobicMode | null = isAerobicMode((ov as { aerobicTest?: unknown }).aerobicTest) ? (ov as { aerobicTest: AerobicMode }).aerobicTest : null;
+  let aerobicTest: AerobicMode | null = aerobicModeOf((ov as { aerobicTest?: unknown }).aerobicTest);
   if (!aerobicTest) {
     const { data: anyRows } = await ctx.sb.from("season_plans").select("season_year, aerobic_test:overrides->>aerobicTest")
       .eq("team_id", ctx.teamId).not("overrides->>aerobicTest", "is", null).order("season_year", { ascending: false }).limit(5);
-    for (const r of (anyRows ?? []) as Array<{ aerobic_test: string | null }>) if (isAerobicMode(r.aerobic_test)) { aerobicTest = r.aerobic_test; break; }
+    for (const r of (anyRows ?? []) as Array<{ aerobic_test: string | null }>) { const m = aerobicModeOf(r.aerobic_test); if (m) { aerobicTest = m; break; } }
   }
   // teamId: the caller's own team (the one this plan is for) — the standalone Week Setup checks it matches its week.
   return NextResponse.json({ ok: true, teamId: ctx.teamId, plan, deloadCadence, savedWindow, savedWindowNext, weekPlans, aerobicTest: aerobicTest ?? DEFAULT_AEROBIC_TEST, aerobicTestSaved: aerobicTest != null });

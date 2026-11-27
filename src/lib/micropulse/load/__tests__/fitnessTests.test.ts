@@ -2,10 +2,18 @@ import { describe, it, expect } from "vitest";
 import { deriveFitnessTest, isFitnessTestType, FITNESS_TEST_TYPES, FITNESS_TESTS } from "../fitnessTests";
 
 describe("fitnessTests derivations", () => {
-  it("4-min run → MAS = distance/4 in km/h", () => {
+  it("6-min run → MAS = distance/6 in km/h", () => {
+    // 1600 m / 6 = 266.7 m/min → ×0.06 = 16.0 km/h
+    expect(deriveFitnessTest("mas_run_6min", 1600).masKmh).toBeCloseTo(16.0, 1);
+    expect(deriveFitnessTest("mas_run_6min", 1600).vo2maxEst).toBeNull();
+  });
+
+  it("the older 4-min run still reads (MAS = distance/4) but is no longer offered for new results", () => {
     // 1015 m / 4 = 253.75 m/min → ×0.06 = 15.2 km/h
     expect(deriveFitnessTest("mas_run_4min", 1015).masKmh).toBeCloseTo(15.2, 1);
-    expect(deriveFitnessTest("mas_run_4min", 1015).vo2maxEst).toBeNull();
+    expect(FITNESS_TESTS.mas_run_4min.legacy).toBe(true);
+    expect(FITNESS_TEST_TYPES).toContain("mas_run_6min");
+    expect(FITNESS_TEST_TYPES).not.toContain("mas_run_4min");
   });
 
   it("Yo-Yo IR1 distance → VO₂max (Bangsbo), no MAS", () => {

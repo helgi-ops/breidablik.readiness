@@ -11,7 +11,7 @@
 import { buildMesoBlocks, blockDeloadOf, holdsStandardWeek, inSeasonRange, type MatchUnit, type MatchUnitAbs, type MesoBlock } from "./index";
 import { buildPreseasonProposal, type CampRegion, type PreseasonProposal, type PreseasonProposalInput, type SavedDay } from "./preseasonProposal";
 import { preseasonSeasonYear, plansNextSeason, preseasonSettingsFrom, type PreseasonSavedRow } from "./preseasonWindow";
-import { DEFAULT_AEROBIC_TEST, isAerobicMode, type AerobicMode } from "./testingSchedule";
+import { DEFAULT_AEROBIC_TEST, aerobicModeOf, type AerobicMode } from "./testingSchedule";
 import { MESO_HORIZON, mesoBlockCalendar, planDaysFromCalWeek, type MesoWeekSeed, type PlanDay } from "./mesoWeek";
 
 type Bi = { en: string; is: string };
@@ -185,7 +185,7 @@ export function mesoSeedFromEcho(j: PeriodizationEcho, o: { teamBreaks: Breaks; 
   const preBlockGoals = upcoming ? (swn.blockGoals && typeof swn.blockGoals === "object" ? swn.blockGoals : {}) : blockGoals;
   const preInput = preseasonInputFor(plan, {
     today: o.today, unit, savedDays: savedPlans, camps: o.camps, cadence: preCadence, blockWeeks: preBlockWeeks, blockGoals: preBlockGoals, baseOverloadPct, stepPct,
-    aerobicMode: isAerobicMode(j.aerobicTest) ? (j.aerobicTest as AerobicMode) : DEFAULT_AEROBIC_TEST,
+    aerobicMode: aerobicModeOf(j.aerobicTest) ?? DEFAULT_AEROBIC_TEST,
     settings: { sessionsPerWeek: pre.sessionsPerWeek, week1MatchMultiple: pre.week1MatchMultiple, week1Kpi: pre.week1Kpi, mesoTail: pre.mesoTail, taperPct: pre.taperPct, gamesFrom: pre.gamesFrom, assumedGames: pre.assumedGames },
   });
   const preProp = buildPreseasonProposal(preInput);

@@ -4,8 +4,9 @@ import { masSourceLabel, latestTestsByPlayer, freshestAerobicDate } from "../fit
 describe("masSourceLabel", () => {
   it("names the test in plain words and marks the 30-15 route as an estimate", () => {
     expect(masSourceLabel("vift_shrunk")).toEqual({ label: { en: "30-15 IFT", is: "30-15 IFT" }, estimated: true });
-    expect(masSourceLabel("run_4min").label.en).toBe("4-min max run");
-    expect(masSourceLabel("run_4min").estimated).toBe(false);
+    expect(masSourceLabel("run_6min").label.en).toBe("6-min max run");
+    expect(masSourceLabel("run_6min").estimated).toBe(false);
+    expect(masSourceLabel("run_4min").label.en).toBe("4-min max run (older test)");
     expect(masSourceLabel("msft").label.en).toMatch(/Beep/);
     expect(masSourceLabel("vameval").estimated).toBe(false);
   });

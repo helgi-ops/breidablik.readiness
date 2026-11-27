@@ -31,7 +31,7 @@ type PeakResp = {
 
 const MAS_SRC_LABEL: Record<string, { en: string; is: string }> = {
   vameval: { en: "VAMEVAL", is: "VAMEVAL" }, msft: { en: "beep test", is: "bíp-test" },
-  run_4min: { en: "4-min run", is: "4-mín hlaup" }, vift_shrunk: { en: "30-15 IFT", is: "30-15 IFT" },
+  run_6min: { en: "6-min run", is: "6-mín hlaup" }, run_4min: { en: "4-min run (older test)", is: "4-mín hlaup (eldra próf)" }, vift_shrunk: { en: "30-15 IFT", is: "30-15 IFT" },
   cs_backcalc: { en: "distance curve", is: "vegalengdarkúrfu" },
 };
 const MSS_SRC_LABEL: Record<string, { en: string; is: string }> = {
@@ -203,7 +203,7 @@ export default function CriticalSpeedCard({ players, playerId }: { players: Arra
     : testCs
       ? { en: "field test", is: "úr prófi" }
       : combinedCs?.usedTestAnchor
-        ? { en: "4-min test + peaks", is: "4-mín próf + toppar" }
+        ? { en: "max test + peaks", is: "hámarkspróf + toppar" }
         : { en: "estimate · match peaks", is: "áætlun · leik-toppar" };
 
   return (
@@ -212,8 +212,8 @@ export default function CriticalSpeedCard({ players, playerId }: { players: Arra
         <span className="text-sm font-bold text-slate-800">{is ? "Úthalds-prófíll (Critical Speed)" : "Conditioning profile (Critical Speed)"}</span>
         <span className="cursor-help rounded bg-[#2740e6]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]"
           title={is
-            ? "CS = hraðinn sem hann getur haldið (D = D′ + CS·t). Fest við 4-mín hámarkspróf ef til (+ topp-gluggar sem standast), annars ÁÆTLUN úr leik-toppum (vanmetur). Ekki W/kg."
-            : "CS = the pace he can sustain (D = D′ + CS·t). Anchored on the 4-min maximal test when on file (+ the peak windows that stay consistent), else an ESTIMATE from match peaks (under-reads). Not W/kg."}>
+            ? "CS = hraðinn sem hann getur haldið (D = D′ + CS·t). Fest við hámarkspróf (6-mín hlaup) ef til (+ topp-gluggar sem standast), annars ÁÆTLUN úr leik-toppum (vanmetur). Ekki W/kg."
+            : "CS = the pace he can sustain (D = D′ + CS·t). Anchored on the maximal test (6-min run) when on file (+ the peak windows that stay consistent), else an ESTIMATE from match peaks (under-reads). Not W/kg."}>
           {is ? "CS · D′ ⓘ" : "CS · D′ ⓘ"}
         </span>
         {!playerId ? (
@@ -450,11 +450,11 @@ export default function CriticalSpeedCard({ players, playerId }: { players: Arra
           <details className="group rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2">
             <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[12px] font-semibold text-slate-600">
               <span className="transition-transform group-open:rotate-90">▸</span>
-              {is ? "Skrá hámarks-próf (t.d. 4-mín all-out)" : "Record a maximal test (e.g. 4-min all-out)"}
+              {is ? "Skrá hámarks-próf (t.d. 6-mín all-out)" : "Record a maximal test (e.g. 6-min all-out)"}
             </summary>
             <div className="mt-2 flex flex-wrap items-end gap-2">
               <label className="text-[11px] text-slate-500">{is ? "Lengd (mín)" : "Duration (min)"}
-                <input value={dur} onChange={(e) => setDur(e.target.value)} inputMode="decimal" placeholder="4" className="mt-0.5 block w-20 rounded border border-slate-300 px-2 py-1 text-[13px] tabular-nums" />
+                <input value={dur} onChange={(e) => setDur(e.target.value)} inputMode="decimal" placeholder="6" className="mt-0.5 block w-20 rounded border border-slate-300 px-2 py-1 text-[13px] tabular-nums" />
               </label>
               <label className="text-[11px] text-slate-500">{is ? "Vegalengd (m)" : "Distance (m)"}
                 <input value={dist} onChange={(e) => setDist(e.target.value)} inputMode="decimal" placeholder="1050" className="mt-0.5 block w-24 rounded border border-slate-300 px-2 py-1 text-[13px] tabular-nums" />
@@ -464,8 +464,8 @@ export default function CriticalSpeedCard({ players, playerId }: { players: Arra
             </div>
             <p className="mt-1.5 text-[10px] leading-relaxed text-slate-400">
               {is
-                ? "Fyrir CS + D′ úr einu prófi, notaðu „Taka 3-mín próf“ hér að ofan. Þetta er fyrir venjuleg hámarkshlaup (t.d. 1-mín, 4-mín)."
-                : "For CS + D′ from one test, use “Run a 3-min test” above. This is for plain max runs (e.g. 1-min, 4-min)."}
+                ? "Fyrir CS + D′ úr einu prófi, notaðu „Taka 3-mín próf“ hér að ofan. Þetta er fyrir venjuleg hámarkshlaup (t.d. 1-mín, 6-mín)."
+                : "For CS + D′ from one test, use “Run a 3-min test” above. This is for plain max runs (e.g. 1-min, 6-min)."}
             </p>
             {(test?.efforts ?? []).length ? (
               <div className="mt-2 flex flex-wrap gap-1.5">

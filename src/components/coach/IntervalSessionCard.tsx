@@ -78,7 +78,7 @@ export default function IntervalSessionCard({ players, playerId }: { players: Ar
       {loading ? <p className="mt-3 text-[13px] text-slate-400">…</p> : null}
 
       {!loading && !mas ? (
-        <p className="mt-3 text-[13px] text-slate-500">{is ? "Skráðu MAS-próf fyrst (t.d. 4-mín hlaup eða VAMEVAL) til að byggja intervöl." : "Record a MAS test first (e.g. a 4-min run or VAMEVAL) to build intervals."}</p>
+        <p className="mt-3 text-[13px] text-slate-500">{is ? "Skráðu MAS-próf fyrst (t.d. 6-mín hlaup eða VAMEVAL) til að byggja intervöl." : "Record a MAS test first (e.g. a 6-min run or VAMEVAL) to build intervals."}</p>
       ) : null}
 
       {!loading && session ? (

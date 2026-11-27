@@ -3401,8 +3401,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "2 · Standardized fitness tests", is: "2 · Stöðluð þolpróf" },
         body: [
           {
-            en: "The fitness-test card stores whichever field test you run — Yo-Yo, 30-15 IFT, beep, VAMEVAL, a 4-minute run, a line drill or a sprint — and converts it to MAS / VIFT / VO₂max on honest, cited formulas. These are the tests that FEED Critical Speed and the load targets, so re-test the same protocol each block to see real change.",
-            is: "Þolpróf-kortið geymir hvaða vallarpróf sem þú keyrir — Yo-Yo, 30-15 IFT, beep, VAMEVAL, 4-mínútna hlaup, línupróf eða sprett — og breytir því í MAS / VIFT / VO₂max með heiðarlegum, tilvitnuðum formúlum. Þetta eru prófin sem FÆÐA Critical Speed og álagsmörkin, svo endurtaktu sama protokoll í hverjum kafla til að sjá raunverulega breytingu.",
+            en: "The fitness-test card stores whichever field test you run — Yo-Yo, 30-15 IFT, beep, VAMEVAL, a 6-minute run, a line drill or a sprint — and converts it to MAS / VIFT / VO₂max on honest, cited formulas. These are the tests that FEED Critical Speed and the load targets, so re-test the same protocol each block to see real change.",
+            is: "Þolpróf-kortið geymir hvaða vallarpróf sem þú keyrir — Yo-Yo, 30-15 IFT, beep, VAMEVAL, 6-mínútna hlaup, línupróf eða sprett — og breytir því í MAS / VIFT / VO₂max með heiðarlegum, tilvitnuðum formúlum. Þetta eru prófin sem FÆÐA Critical Speed og álagsmörkin, svo endurtaktu sama protokoll í hverjum kafla til að sjá raunverulega breytingu.",
           },
           {
             en: "The tests serve every team, including basketball — they are not GPS-gated. Keep the protocol identical (same track, same day-in-week, same rested state) so a change in the number reflects the player, not the conditions.",

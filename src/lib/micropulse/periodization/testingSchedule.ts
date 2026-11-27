@@ -23,7 +23,7 @@ export type TestKey = "aerobic" | "cmj" | "maxStrength" | "nordbord" | "sprint";
  * (`load/fitnessTests.ts`, the same list Conditioning records). The keys ARE the registry keys, so a
  * result recorded on Conditioning and the test the hub schedules are the same thing.
  */
-export const AEROBIC_TEST_KEYS = ["ift_30_15", "yo_yo_ir1", "yo_yo_ir2", "msft_beep", "mas_vameval", "mas_run_4min"] as const;
+export const AEROBIC_TEST_KEYS = ["ift_30_15", "yo_yo_ir1", "yo_yo_ir2", "msft_beep", "mas_vameval", "mas_run_6min"] as const;
 export type AerobicMode = (typeof AEROBIC_TEST_KEYS)[number];
 export const DEFAULT_AEROBIC_TEST: AerobicMode = "ift_30_15";
 
@@ -31,12 +31,19 @@ export function isAerobicMode(x: unknown): x is AerobicMode {
   return typeof x === "string" && (AEROBIC_TEST_KEYS as readonly string[]).includes(x);
 }
 
+/** A saved choice or a recorded result as the aerobic test it is now. The older 4-min run reads as the
+ *  6-min run that replaced it (a team that chose the 4-min run now schedules the 6-min run). */
+export function aerobicModeOf(x: unknown): AerobicMode | null {
+  if (x === "mas_run_4min") return "mas_run_6min";
+  return isAerobicMode(x) ? x : null;
+}
+
 /** What the test's number can honestly set: a running speed (MAS → interval speeds), an intermittent
  *  speed (VIFT → %VIFT), or a capacity trend only (Yo-Yo: distance, no speed). */
 export type AerobicOutput = "mas" | "vift" | "capacity";
 const AEROBIC_OUTPUT: Record<AerobicMode, AerobicOutput> = {
   ift_30_15: "vift", yo_yo_ir1: "capacity", yo_yo_ir2: "capacity",
-  msft_beep: "mas", mas_vameval: "mas", mas_run_4min: "mas",
+  msft_beep: "mas", mas_vameval: "mas", mas_run_6min: "mas",
 };
 
 export type AerobicTestOption = { key: AerobicMode; label: Bi; output: AerobicOutput; note: Bi; cite: string };

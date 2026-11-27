@@ -1,6 +1,6 @@
 /**
  * Standardized endurance / fitness tests store — the field tests coaches actually run (Yo-Yo,
- * 30-15 IFT, beep/MSFT, VAMEVAL, the 4-min max run, line drill, max sprint). One generic
+ * 30-15 IFT, beep/MSFT, VAMEVAL, the 6-min max run (the older 4-min run still reads), line drill, max sprint). One generic
  * `player_fitness_test` row per result; this lib is the registry + the HONEST derivations
  * (MAS / VO₂max) — a derived field is filled ONLY when the test actually supports that estimate,
  * otherwise null. Pure, no I/O.
@@ -10,14 +10,14 @@
  *
  * Ref: Greinar/Tholpróf-fótbolti-korfubolti-yfirlit.md
  * Cite: Bangsbo/Iaia/Krustrup 2008 (Yo-Yo) · Buchheit 2008 (30-15 IFT) · Léger 1982
- *       (20 m MSFT) · Cazorla/Léger (VAMEVAL/UMTT MAS) · Berthon 1997 (timed-run MAS).
+ *       (20 m MSFT) · Cazorla/Léger (VAMEVAL/UMTT MAS) · Berthon 1997 / Bellenger 2015 (timed-run MAS).
  */
 
 import type { Bi } from "./peakPeriod";
 
 export type FitnessTestType =
   | "yo_yo_ir1" | "yo_yo_ir2" | "ift_30_15" | "msft_beep" | "mas_vameval"
-  | "mas_run_4min" | "line_drill" | "suicide_17s" | "sprint_max";
+  | "mas_run_6min" | "mas_run_4min" | "line_drill" | "suicide_17s" | "sprint_max";
 
 export interface FitnessTestDerived { masKmh: number | null; vo2maxEst: number | null }
 
@@ -30,6 +30,8 @@ export interface FitnessTestDef {
   /** Honest derivation from the primary result (+ optional secondary fields). null when unsupported. */
   derive: (result: number) => FitnessTestDerived;
   citation: string;
+  /** Older test kept so recorded results still read, but no longer offered for new results. */
+  legacy?: boolean;
 }
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
@@ -79,13 +81,24 @@ export const FITNESS_TESTS: Record<FitnessTestType, FitnessTestDef> = {
     derive: (mas) => ({ masKmh: mas > 0 ? r1(mas) : null, vo2maxEst: null }),
     citation: "Cazorla / Léger (VAMEVAL/UMTT)",
   },
+  // The MAS run is 6 min: a 4-min all-out run is too short and its average speed sits above MAS.
+  // Timed-run MAS is validated at 5 min (Berthon 1997) and from 1200–2200 m time trials, 2000 m
+  // best (Bellenger 2015) — at football MAS (~15–17 km/h) 6 min is ~1500–1700 m, inside that range.
+  mas_run_6min: {
+    key: "mas_run_6min", unit: "m",
+    label: { en: "6-min max run", is: "6-mín hámarkshlaup" },
+    resultLabel: { en: "Distance in 6 min (m)", is: "Vegalengd á 6 mín (m)" },
+    hint: { en: "Go as far as you can in 6 min → MAS = distance ÷ 6.", is: "Farðu eins langt og þú getur á 6 mín → MAS = vegalengd ÷ 6." },
+    derive: (d) => ({ masKmh: d > 0 ? r1((d / 6) * 0.06) : null, vo2maxEst: null }),
+    citation: "MAS from a timed run (5-min field test: Berthon 1997; 1200–2200 m time trials: Bellenger 2015)",
+  },
   mas_run_4min: {
-    key: "mas_run_4min", unit: "m",
-    label: { en: "4-min max run", is: "4-mín hámarkshlaup" },
+    key: "mas_run_4min", unit: "m", legacy: true,
+    label: { en: "4-min max run (older test)", is: "4-mín hámarkshlaup (eldra próf)" },
     resultLabel: { en: "Distance in 4 min (m)", is: "Vegalengd á 4 mín (m)" },
-    hint: { en: "Go as far as you can in 4 min → MAS = distance ÷ 4.", is: "Farðu eins langt og þú getur á 4 mín → MAS = vegalengd ÷ 4." },
+    hint: { en: "Older test: MAS = distance ÷ 4 reads high (too short a run). Use the 6-min run.", is: "Eldra próf: MAS = vegalengd ÷ 4 les of hátt (of stutt hlaup). Notaðu 6-mín hlaupið." },
     derive: (d) => ({ masKmh: d > 0 ? r1((d / 4) * 0.06) : null, vo2maxEst: null }),
-    citation: "Approximate MAS (5-min field test: Berthon 1997; shorter runs read high: Bellenger 2015)",
+    citation: "Approximate MAS, reads high (shorter than the validated runs: Berthon 1997; Bellenger 2015)",
   },
   line_drill: {
     key: "line_drill", unit: "s",
@@ -113,7 +126,8 @@ export const FITNESS_TESTS: Record<FitnessTestType, FitnessTestDef> = {
   },
 };
 
-export const FITNESS_TEST_TYPES = Object.keys(FITNESS_TESTS) as FitnessTestType[];
+/** The tests a coach can record a NEW result for (older tests only read). */
+export const FITNESS_TEST_TYPES = (Object.keys(FITNESS_TESTS) as FitnessTestType[]).filter((t) => !FITNESS_TESTS[t].legacy);
 
 export function isFitnessTestType(x: unknown): x is FitnessTestType {
   return typeof x === "string" && Object.prototype.hasOwnProperty.call(FITNESS_TESTS, x);

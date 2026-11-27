@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Fitness tests — record standardized endurance tests (Yo-Yo, 30-15 IFT, beep, VAMEVAL, 4-min MAS
+ * Fitness tests — record standardized endurance tests (Yo-Yo, 30-15 IFT, beep, VAMEVAL, 6-min MAS
  * run, line drill, 17s, max sprint) per player and see the history + honest derived MAS/VO₂max.
  * Descriptive — feeds MAS/VIFT prescription + CS/D′ + ASR, never the readiness colour. Bilingual.
  */

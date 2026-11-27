@@ -33,7 +33,7 @@ export async function GET(req: Request) {
 
   // Direct incremental/field MAS test → moderate; a shrunk/back-calc proxy → low. (No "high" without
   // MSS validation, which this MAS-only read doesn't do.)
-  const direct = resolved.source === "vameval" || resolved.source === "msft" || resolved.source === "run_4min";
+  const direct = resolved.source === "vameval" || resolved.source === "msft" || resolved.source === "run_6min" || resolved.source === "run_4min";
   const confidence = direct ? "moderate" : "low";
   return NextResponse.json({ ok: true, mas: { kmh: Math.round(resolved.masKmh * 10) / 10, confidence } });
 }

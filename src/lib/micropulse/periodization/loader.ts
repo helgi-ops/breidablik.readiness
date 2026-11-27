@@ -28,7 +28,7 @@ import { masSourceLabel, latestTestsByPlayer, freshestAerobicDate, type LatestTe
 export type PlayerPeriodization = {
   playerId: string; name: string; position: string | null;
   /** MAS from the shared resolver (`resolveMas`, the same as Conditioning's speed zones): the freshest measured
-   *  MAS (VAMEVAL / beep / 4-min run) beats a 30-15 IFT estimate (VIFT × 0.86). masSource = the test's plain name. */
+   *  MAS (VAMEVAL / beep / 6-min run) beats a 30-15 IFT estimate (VIFT × 0.86). masSource = the test's plain name. */
   masKmh: number | null; masSource: string | null; masSourceIs: string | null; masEstimated: boolean; masAgeDays: number | null;
   /** Days since the freshest aerobic test of ANY kind (incl. Yo-Yo, which gives no MAS) — drives "due now". */
   aerobicTestAgeDays: number | null;

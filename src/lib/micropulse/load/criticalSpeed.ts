@@ -220,8 +220,8 @@ const MIN_FIT_SPAN_MIN = 2;                        // fitted windows must span �
 const CS_PLAUSIBLE_KMH: [number, number] = [8, 24]; // reject degenerate fits outside team-sport range
 
 const CAVEAT_COMBINED: Bi = {
-  en: "Anchored on a genuine maximal test (the 4-min run) and completed with the session peak windows that stay physically consistent with it. A field estimate, not a lab test to exhaustion — with only a few points D′ (the reserve) is the softer number. Descriptive context — it never changes the readiness verdict or the daily plan.",
-  is: "Fest við raunverulegt hámarkspróf (4-mín hlaupið) og fyllt með þeim topp-gluggum úr æfingum sem standast eðlisfræðilega. Vallar-mat, ekki rannsóknarstofupróf til örmögnunar — með aðeins fáa punkta er D′ (forðinn) mýkri talan. Lýsandi samhengi — breytir aldrei readiness-dómnum eða dagsáætluninni.",
+  en: "Anchored on a genuine maximal test (the 6-min run, or the older 4-min run) and completed with the session peak windows that stay physically consistent with it. A field estimate, not a lab test to exhaustion — with only a few points D′ (the reserve) is the softer number. Descriptive context — it never changes the readiness verdict or the daily plan.",
+  is: "Fest við raunverulegt hámarkspróf (6-mín hlaupið, eða eldra 4-mín hlaupið) og fyllt með þeim topp-gluggum úr æfingum sem standast eðlisfræðilega. Vallar-mat, ekki rannsóknarstofupróf til örmögnunar — með aðeins fáa punkta er D′ (forðinn) mýkri talan. Lýsandi samhengi — breytir aldrei readiness-dómnum eða dagsáætluninni.",
 };
 
 const NEED_SECOND_EFFORT: Bi = {
@@ -466,7 +466,7 @@ export function computeSprintCost(opts: {
   return { dPrimeM: Math.round(dPrime), csKmh: r1(cs), refDurationSec: t, usesMss, rows, verdict, caveat: CAVEAT_SPRINT_COST, citation: SPRINT_COST_CITATION };
 }
 
-// ── Coach-usable numbers from a SINGLE 4-min maximal run (works even without a CS fit) ──
+// ── Coach-usable numbers from a SINGLE maximal run (the 6-min MAS run) (works even without a CS fit) ──
 //
 // A 3–6 min "go as far as you can" run's average pace is the standard field estimate of a
 // player's Maximal Aerobic Speed (MAS) — the speed a coach anchors running conditioning to.
@@ -478,7 +478,7 @@ const MAS_ZONES: Array<{ key: string; pct: number; en: string; is: string }> = [
   { key: "recovery",  pct: 0.65, en: "Recovery",        is: "Endurheimt" },
   { key: "aerobic",   pct: 0.80, en: "Aerobic",         is: "Þolþjálfun" },
   { key: "threshold", pct: 0.90, en: "Threshold",       is: "Þröskuldur" },
-  { key: "mas",       pct: 1.00, en: "MAS (4-min max)",  is: "MAS (4-mín hámark)" },
+  { key: "mas",       pct: 1.00, en: "MAS (max run)",   is: "MAS (hámarkshlaup)" },
   { key: "vo2",       pct: 1.10, en: "VO₂ intervals",    is: "VO₂ interval" },
   { key: "speed",     pct: 1.20, en: "Speed",            is: "Hraði" },
 ];
@@ -555,7 +555,7 @@ export interface AnaerobicSpeedReserveRead {
 }
 
 /**
- * Anaerobic Speed Reserve from MAS (4-min test) + MSS (season-best GPS max velocity). Pure.
+ * Anaerobic Speed Reserve from MAS (6-min run) + MSS (season-best GPS max velocity). Pure.
  * Returns null unless MSS > MAS > 0. `%ASR` anchors give individualised supra-MAS running speeds.
  */
 export function computeAnaerobicSpeedReserve(opts: {
@@ -584,8 +584,8 @@ export function computeAnaerobicSpeedReserve(opts: {
     is: `Loftfirrtur hraðaforði ${String(r1(asr)).replace(".", ",")} km/klst — frá ${String(r1(mas)).replace(".", ",")} km/klst (MAS) upp í ${String(r1(mss)).replace(".", ",")} km/klst (topphraði). Akkuru supra-MAS hlaup á %ASR.`,
   };
   const caveat: Bi = {
-    en: "MSS is the season-best GPS max velocity (a match/training sprint) — a proxy for a dedicated flying-sprint test; MAS is the 4-min run. %ASR anchors individualise high-speed running. Descriptive — never touches readiness.",
-    is: "MSS er besti GPS-hámarkshraði tímabilsins (spretti úr leik/æfingu) — nálgun á sérhæft flug-sprett-próf; MAS er 4-mín hlaupið. %ASR akkeri einstaklingsmiða háhraða-hlaup. Lýsandi — snertir aldrei readiness.",
+    en: "MSS is the season-best GPS max velocity (a match/training sprint) — a proxy for a dedicated flying-sprint test; MAS is the timed max run (6 min). %ASR anchors individualise high-speed running. Descriptive — never touches readiness.",
+    is: "MSS er besti GPS-hámarkshraði tímabilsins (spretti úr leik/æfingu) — nálgun á sérhæft flug-sprett-próf; MAS er tímamælda hámarkshlaupið (6 mín). %ASR akkeri einstaklingsmiða háhraða-hlaup. Lýsandi — snertir aldrei readiness.",
   };
 
   return { masKmh: r1(mas), mssKmh: r1(mss), asrKmh: r1(asr), anchors, percentile: pctile, profile, verdict, citation: ASR_CITATION, caveat };

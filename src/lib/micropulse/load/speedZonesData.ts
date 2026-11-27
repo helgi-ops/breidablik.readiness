@@ -35,6 +35,7 @@ function masSourceForType(testType: string | null | undefined): MasSource | null
   switch (testType) {
     case "mas_vameval": return "vameval";
     case "msft_beep": return "msft";
+    case "mas_run_6min": return "run_6min";
     case "mas_run_4min": return "run_4min";
     default: return null;
   }
@@ -42,7 +43,7 @@ function masSourceForType(testType: string | null | undefined): MasSource | null
 
 /**
  * Freshest MAS per player, provenance-ranked: a direct incremental/field test
- * (VAMEVAL / MSFT / 4-min run, from `player_fitness_test` or `player_running_test`) beats a
+ * (VAMEVAL / MSFT / 6-min or older 4-min run, from `player_fitness_test` or `player_running_test`) beats a
  * VIFT-shrunk estimate (30-15 IFT × 0.86). CS-back-calc from the distance curve is a documented
  * lower tier, not wired here (it needs a per-player curve fit) — a null MAS is honest, a guessed
  * one is not.
@@ -80,7 +81,7 @@ export async function resolveMas(teamId: string, client?: SupabaseClient): Promi
     const spm = num(r.speed_m_per_min);
     const dist = num(r.distance_m), dur = num(r.duration_s);
     const masKmh = spm != null && spm > 0 ? spm * 0.06 : (dist != null && dur != null && dur > 0 ? (dist / dur) * 3.6 : null);
-    if (masKmh != null && masKmh > 0) direct.set(pid, { masKmh: Math.round(masKmh * 10) / 10, source: "run_4min", date: r.test_date });
+    if (masKmh != null && masKmh > 0) direct.set(pid, { masKmh: Math.round(masKmh * 10) / 10, source: dur != null && dur >= 300 ? "run_6min" : "run_4min", date: r.test_date });
   }
 
   const out = new Map<string, MasResolved>();

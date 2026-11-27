@@ -135,10 +135,10 @@ export async function GET(req: NextRequest) {
     testsByPlayer.set(pid, arr);
   };
   for (const r of runTests ?? []) addEffort(r.player_id, Number(r.duration_s) / 60, Number(r.distance_m));
-  // Union the generic fitness-test store's 4-min MAS runs (canonical going forward).
-  const fitRuns = await fetchAllPages<{ player_id: string; result_value: number | string | null }>((from, to) =>
-    sb.from("player_fitness_test").select("player_id, result_value").eq("team_id", teamId).eq("test_type", "mas_run_4min").range(from, to));
-  for (const r of fitRuns ?? []) addEffort(r.player_id, 4, Number(r.result_value));
+  // Union the generic fitness-test store's MAS runs: the 6-min run (canonical) + the older 4-min run.
+  const fitRuns = await fetchAllPages<{ player_id: string; test_type: string; result_value: number | string | null }>((from, to) =>
+    sb.from("player_fitness_test").select("player_id, test_type, result_value").eq("team_id", teamId).in("test_type", ["mas_run_6min", "mas_run_4min"]).range(from, to));
+  for (const r of fitRuns ?? []) addEffort(r.player_id, r.test_type === "mas_run_6min" ? 6 : 4, Number(r.result_value));
 
   // Squad CS/D′ for percentiles — like-for-like: only players who ALSO have a maximal test
   // anchor enter the pool (combined fits), so the benchmark compares tested athletes.
@@ -169,7 +169,7 @@ export async function GET(req: NextRequest) {
     squadDPrime: squadDPrime.length >= 2 ? squadDPrime : undefined,
   });
 
-  // Anaerobic Speed Reserve — MSS (season-best GPS max velocity) minus MAS (4-min test). Squad
+  // Anaerobic Speed Reserve — MSS (season-best GPS max velocity) minus MAS (6-min run). Squad
   // ASR (like-for-like: tested players) gives the percentile.
   const mvRows = await fetchAllPages<{ player_id: string; max_velocity: number | null; max_vel: number | null }>((from, to) =>
     sb.from("player_external_load_daily").select("player_id, max_velocity, max_vel")
@@ -191,6 +191,8 @@ export async function GET(req: NextRequest) {
     const v = Number(r.result_value);
     if (Number.isFinite(v) && v > 0) { mssByPlayer.set(r.player_id, v); mssFromSprintTest.add(r.player_id); } // override the GPS proxy
   }
+  // MAS = the pace of the LONGEST maximal run (a 6-min run beats the older, shorter 4-min run).
+  const longestEffortMin = (efforts: CsTestEffort[] | undefined): number => (efforts ?? []).reduce((m, e) => Math.max(m, e.durationMin), 0);
   const masKmhFor = (efforts: CsTestEffort[] | undefined): number | null => {
     if (!efforts?.length) return null;
     const longest = efforts.reduce((a, b) => (b.durationMin > a.durationMin ? b : a));
@@ -212,7 +214,7 @@ export async function GET(req: NextRequest) {
   // ceiling. Descriptive — never touches readiness. See speedZones.ts / speedZonesData.ts.
   const mssIsSprintTest = mssFromSprintTest.has(playerId);
   const speedZones = buildSpeedZones({
-    masKmh: masKmhFor(testsByPlayer.get(playerId)), masSource: "run_4min",
+    masKmh: masKmhFor(testsByPlayer.get(playerId)), masSource: longestEffortMin(testsByPlayer.get(playerId)) >= 5 ? "run_6min" : "run_4min",
     mssKmh: mssByPlayer.get(playerId) ?? null, mssSource: mssIsSprintTest ? "sprint_test" : "gps_season_max",
     squadAsr: squadAsr.length >= 2 ? squadAsr : undefined,
     mssSessions: mssIsSprintTest ? undefined : gpsSessionsByPlayer.get(playerId) ?? 0,

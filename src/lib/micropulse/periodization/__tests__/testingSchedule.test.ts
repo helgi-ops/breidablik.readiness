@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { recommendTestingSchedule, testsForBlock, AEROBIC_TESTS, AEROBIC_TEST_KEYS, isAerobicMode, testShortName } from "../testingSchedule";
+import { recommendTestingSchedule, testsForBlock, AEROBIC_TESTS, AEROBIC_TEST_KEYS, isAerobicMode, aerobicModeOf, testShortName } from "../testingSchedule";
 import { FITNESS_TESTS } from "@/lib/micropulse/load/fitnessTests";
 
 describe("recommendTestingSchedule", () => {
@@ -84,11 +84,18 @@ describe("aerobic test choice — the six Conditioning tests", () => {
       const p = recommendTestingSchedule({ preseasonWeeks: 4, aerobicMode: k }).find((x) => x.protocol.key === "aerobic")!.protocol;
       expect(p.prescribes.en).toMatch(/no running speed/);
     }
-    for (const k of ["msft_beep", "mas_vameval", "mas_run_4min"] as const) {
+    for (const k of ["msft_beep", "mas_vameval", "mas_run_6min"] as const) {
       expect(AEROBIC_TESTS.find((x) => x.key === k)!.output).toBe("mas");
       expect(recommendTestingSchedule({ preseasonWeeks: 4, aerobicMode: k }).find((x) => x.protocol.key === "aerobic")!.protocol.prescribes.en).toMatch(/MAS/);
     }
     expect(AEROBIC_TESTS.find((x) => x.key === "ift_30_15")!.note.en).toMatch(/estimate/);
+  });
+
+  it("a team that chose the older 4-min run now schedules the 6-min run", () => {
+    expect(aerobicModeOf("mas_run_4min")).toBe("mas_run_6min");
+    expect(aerobicModeOf("mas_vameval")).toBe("mas_vameval");
+    expect(aerobicModeOf("nope")).toBeNull();
+    expect(isAerobicMode("mas_run_4min")).toBe(false);
   });
 
   it("the Aerobic chip names the chosen test; other chips keep their short name", () => {
