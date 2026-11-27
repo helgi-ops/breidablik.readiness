@@ -138,6 +138,16 @@ export function mesoCalWeekFor(ctx: MesoSeedContext, ws: string): CalWeek | null
   return r.cal.weeks.find((w) => w.weekStart === ws) ?? null;
 }
 
+/** The plan a week's "Did we do enough?" compares against: the pre-season plan's fitted week (its friendlies count
+ *  in the week's total — `friendlies` carries the league opener, which never does) or the in-season Meso week
+ *  (mesoCalWeekFor). Null outside both. */
+export function mesoEnoughWeekFor(ctx: MesoSeedContext, ws: string): { week: CalWeek; friendlies: { opener: string | null } | null } | null {
+  const pcw = ctx.preProp?.engine.cal.weeks.find((w) => w.weekStart === ws);
+  if (pcw && ctx.preProp?.weeks.some((w) => w.weekStart === ws)) return { week: pcw, friendlies: { opener: ctx.preProp.opener } };
+  const cw = mesoCalWeekFor(ctx, ws);
+  return cw ? { week: cw, friendlies: null } : null;
+}
+
 /** The Meso week for a Monday, as week_plans days — null when the week is outside the pre-season plan and the
  *  in-season Meso window (Micro then falls back to its match-anchored grid). */
 export function mesoWeekFor(ctx: MesoSeedContext, ws: string): MesoWeekSeed | null {

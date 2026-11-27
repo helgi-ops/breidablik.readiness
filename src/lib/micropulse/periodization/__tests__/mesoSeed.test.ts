@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildPreseasonProposal } from "../preseasonProposal";
 import { type MatchUnit, type SeasonPhase } from "../index";
-import { assumedWeekMove, mesoCalWeekFor, mesoSeedFromEcho, mesoWeekFor, preseasonInputFor, seasonMesoBlocks, teamCalendarUnit, type SeedPlan } from "../mesoSeed";
+import { assumedWeekMove, mesoCalWeekFor, mesoEnoughWeekFor, mesoSeedFromEcho, mesoWeekFor, preseasonInputFor, seasonMesoBlocks, teamCalendarUnit, type SeedPlan } from "../mesoSeed";
 import { planDaysFromCalWeek } from "../mesoWeek";
 import { inSeasonKpiMultiple } from "../inSeasonStandardWeek";
 
@@ -75,6 +75,18 @@ describe("mesoSeedFromEcho — the standalone page reads the week the hub's Micr
     expect(doubled.days[mech].accel).toBeCloseTo(2 * cw.days[mech].accel!, 0);
     expect(doubled.days[mech].decel).toBe(cw.days[mech].decel);
     expect(mesoCalWeekFor(s.ctx, "2026-03-02")).toBeNull();
+  });
+
+  it("mesoEnoughWeekFor: a pre-season week = the Pre-season plan's fitted week with the opener; in-season = mesoCalWeekFor", () => {
+    const pre = s.ctx.preProp!;
+    const ws = pre.weeks[0].weekStart;
+    const r = mesoEnoughWeekFor(s.ctx, ws)!;
+    expect(r.week).toBe(pre.engine.cal.weeks.find((w) => w.weekStart === ws));
+    expect(r.friendlies).toEqual({ opener: pre.opener });
+    const ins = mesoEnoughWeekFor(s.ctx, "2026-04-20")!;
+    expect(ins.friendlies).toBeNull();
+    expect(ins.week).toEqual(mesoCalWeekFor(s.ctx, "2026-04-20"));
+    expect(mesoEnoughWeekFor(s.ctx, "2025-01-06")).toBeNull();
   });
 
   it("'No game this week' re-flows the week with no game", () => {

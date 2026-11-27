@@ -23,6 +23,48 @@ function done(i: number, f = 1, over: Partial<Record<WeekKey, number | null>> = 
 const allDone = (f = 1) => [done(1, f), done(2, f), done(4, f)];
 const AFTER = "2026-10-12";
 
+describe("buildWeekEnough — pre-season friendlies", () => {
+  // A pre-season week: the friendly on Sat is planned as part of a match (here 900 m HSR = 0.6 of a 1,500 m match).
+  const fr = (sat: number, players = 18): ActualDay => ({ date: iso(5), isMatch: true, players, med: { imaAccel: 40 * sat, imaDecel: 50 * sat, imaCod: 200 * sat, hsr: 900 * sat, load: 600 * sat, dist: 6000 * sat }, nonStarters: 0, medNonStarter: {} });
+  const preWeek = (): PlanWeek => week({ 5: { type: "match", accel: 40, decel: 50, cod: 200, hsr: 900, load: 600, dist: 6000 } });
+
+  it("counts the friendly on both sides and names it", () => {
+    const r = buildWeekEnough({ week: preWeek(), actual: [...allDone(1), fr(1)], today: AFTER, friendlies: { opener: null } });
+    expect(r.friendlies).toBe(true);
+    expect(r.sessions).toEqual({ planned: 4, elapsed: 4, withData: 4, extra: 0 });
+    expect(r.days[5].role).toBe("counted");
+    expect(r.vars.find((v) => v.key === "hsr")).toMatchObject({ planned: 1800, actual: 1800, status: "on" });
+    expect(r.verdict).toBe("yes");
+    expect(r.facts.some((f) => f.en.includes("friendly on Sat is in the total"))).toBe(true);
+  });
+
+  it("a short friendly pulls the week down, and is named as the lowest day", () => {
+    const r = buildWeekEnough({ week: preWeek(), actual: [...allDone(1), fr(0.3)], today: AFTER, friendlies: { opener: null } });
+    expect(r.vars.find((v) => v.key === "hsr")!.pct).toBe(Math.round(((900 + 270) / 1800) * 100));
+    expect(r.facts.some((f) => f.en.startsWith("Sat (Friendly) was furthest under"))).toBe(true);
+  });
+
+  it("the league opener is a match, never in the total", () => {
+    const r = buildWeekEnough({ week: preWeek(), actual: [...allDone(1), fr(0.3)], today: AFTER, friendlies: { opener: iso(5) } });
+    expect(r.days[5].role).toBe("match");
+    expect(r.sessions.planned).toBe(3);
+    expect(r.vars.find((v) => v.key === "hsr")).toMatchObject({ planned: 900, actual: 900 });
+  });
+
+  it("a friendly without data is left out, not a 0", () => {
+    const r = buildWeekEnough({ week: preWeek(), actual: allDone(1), today: AFTER, friendlies: { opener: null } });
+    expect(r.days[5].role).toBe("no_data");
+    expect(r.verdict).toBe("yes");
+  });
+
+  it("in season (no friendlies option) a match day is still never counted", () => {
+    const r = buildWeekEnough({ week: preWeek(), actual: [...allDone(1), fr(0.3)], today: AFTER });
+    expect(r.friendlies).toBe(false);
+    expect(r.days[5].role).toBe("match");
+    expect(r.sessions.planned).toBe(3);
+  });
+});
+
 describe("buildWeekEnough", () => {
   it("says YES when the sessions hit their plan", () => {
     const r = buildWeekEnough({ week: week(), actual: allDone(1), today: AFTER });

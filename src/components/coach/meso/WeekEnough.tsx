@@ -13,7 +13,7 @@ import type { PvaStatus } from "@/lib/micropulse/loadPlan/plannedVsActual";
 import type { TeamVerdict } from "@/lib/micropulse/sessionEnough";
 import { ENOUGH_TECH } from "@/lib/micropulse/sessionEnough";
 import {
-  buildWeekEnough, DAY_TYPE_NAME, DOW, WEEK_ENOUGH_CITATIONS, WEEK_KEYS, WEEK_LABEL,
+  buildWeekEnough, dayTypeName, DOW, WEEK_ENOUGH_CITATIONS, WEEK_KEYS, WEEK_LABEL,
   type BlockEnough, type DayRole, type PlanWeek, type WeekEnough, type WeekKey,
 } from "@/lib/micropulse/sessionEnough/weekEnough";
 import { useWeekEnoughActuals } from "./useWeekEnough";
@@ -107,12 +107,20 @@ const METHOD: Bi = {
   is: "Planað = tölur Mesó-dagatalsins fyrir hvern æfingadag (meðalleikur liðsins × hlutfall dagsgerðar × stígandi lotunnar, með þínum − / + á hverja breytu, léttri viku, æfingabúðum og færðum dögum), lagðar saman yfir dagana sem eru liðnir. Gert = miðgildi hópsins á hverri æfingu (leikmenn með fulla æfingu: einhver hreyfing skráð, 20 mín eða meira, ekki undir 60% af lengd æfingar hópsins), lagt saman á sama hátt. Á áfyllingardegi (MD+1) jafna þeir sig sem byrjuðu síðasta leik (60+ mín), svo miðgildi hinna er borið saman. Metið: hraðaaukningar, hemlun, stefnubreytingar og háhraðahlaup (GPS-bönd 5–6); Player Load og vegalengd eru aðeins sýnd. Nóg = 85% af plani eða meira í hreyfiþætti (sami þröskuldur og á dagsspjaldinu); „ekki nóg“ = flestir undir 85%, eða tveir undir 60%. Yfir plani er athugasemd, ekki fall. Skipulögð æfing án gagna, og háhraðahlaup innanhúss (ekkert GPS), eru tekin út beggja vegna, aldrei talin sem 0. Dagsspjaldið á Eftir æfingu metur hvern dag við staðlaða dagshlutfallið, svo vika sem þú hefur stillt sjálfur getur lesist öðruvísi þar.",
 };
 
+/** Pre-season: the friendly is in the plan's week total, so it is in the comparison too. */
+const METHOD_PRESEASON: Bi = {
+  en: "Pre-season: the plan is the Pre-season tab's week, and its total includes the friendly (the training days are fitted around it). So the friendly counts on both sides: planned = the plan's game-day numbers (a share of a match, 50% of the minutes in week 1 rising to 90% before the opener), done = the squad median that day (players with a full game share, same filters). The league opener is a match, never in the total.",
+  is: "Undirbúningur: planið er vika Pre-season-flipans og heildin hennar inniheldur æfingaleikinn (æfingadagarnir eru felldir að honum). Því er æfingaleikurinn talinn báðum megin: planað = tölur plansins fyrir leikdaginn (hluti af leik, 50% af mínútunum í viku 1 upp í 90% fyrir fyrsta leik), gert = miðgildi hópsins þann dag (leikmenn með fullan hlut í leiknum, sömu síur). Fyrsti deildarleikurinn er leikur og aldrei í heildinni.",
+};
+
 /** The Micro tab's card: did the open week do what its plan asked? */
 export function WeekEnoughCard({ is, enough, loading }: { is: boolean; enough: WeekEnough | null; loading?: boolean }) {
   const L = (b: Bi) => (is ? b.is : b.en);
   if (!enough) return null;
   const title = L({ en: "Did we do enough this week?", is: "Gerðum við nóg í vikunni?" });
-  const sub = L({ en: "The week's training against the Meso plan for it, squad medians.", is: "Æfingar vikunnar miðað við Mesó-planið fyrir hana, miðgildi hópsins." });
+  const sub = enough.friendlies
+    ? L({ en: "The week's training and friendly against the pre-season plan for it, squad medians.", is: "Æfingar og æfingaleikur vikunnar miðað við undirbúningsplanið fyrir hana, miðgildi hópsins." })
+    : L({ en: "The week's training against the Meso plan for it, squad medians.", is: "Æfingar vikunnar miðað við Mesó-planið fyrir hana, miðgildi hópsins." });
   const head = (
     <div className="flex flex-wrap items-baseline justify-between gap-2">
       <h3 className="text-[15px] font-bold text-[#14181c]" style={{ fontFamily: "var(--font-archivo, inherit)" }}>{title}</h3>
@@ -161,7 +169,7 @@ export function WeekEnoughCard({ is, enough, loading }: { is: boolean; enough: W
               {enough.days.map((d, i) => (
                 <tr key={d.date} className="border-b border-[#ece9e2]">
                   <td className="whitespace-nowrap py-1 pr-2 text-slate-800">{L(DOW[i])} <span className="text-slate-400">{d.date.slice(5)}</span></td>
-                  <td className="whitespace-nowrap py-1 pr-2 text-slate-600">{L(DAY_TYPE_NAME[d.type] ?? { en: d.type, is: d.type })}</td>
+                  <td className="whitespace-nowrap py-1 pr-2 text-slate-600">{L(dayTypeName(d.type, enough.friendlies))}</td>
                   <td className="py-1 pr-2 text-right tabular-nums text-slate-600">{d.players || "—"}</td>
                   {WEEK_KEYS.filter((k) => k !== "load" && k !== "dist").map((k) => {
                     const c = d.byKey[k];
@@ -177,6 +185,7 @@ export function WeekEnoughCard({ is, enough, loading }: { is: boolean; enough: W
         <div className="mt-4 rounded-lg bg-[#f4f2ec] p-3 text-[11px] leading-relaxed text-slate-600">
           <div className="mb-1 font-semibold text-slate-700">{L({ en: "How this is calculated", is: "Hvernig þetta er reiknað" })}</div>
           <p>{L(METHOD)}</p>
+          {enough.friendlies && <p className="mt-1.5">{L(METHOD_PRESEASON)}</p>}
           <p className="mt-1.5 text-slate-500">{L({ en: "Sources: ", is: "Heimildir: " })}{WEEK_ENOUGH_CITATIONS.join(" · ")}</p>
         </div>
       </ShowDetails>
@@ -227,13 +236,14 @@ export function BlockEnoughLine({ is, block, weeks }: { is: boolean; block: Bloc
 
 const addDaysIso = (iso: string, n: number) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 
-/** The Micro tab's slot: reads the open week's sessions and shows the card. Nothing outside the in-season plan
- *  (`week` null), for a team without Vector Pro, or when the read failed. */
-export function MicroWeekEnough({ is, week }: { is: boolean; week: PlanWeek | null }) {
+/** The Micro tab's slot: reads the open week's sessions and shows the card. Nothing outside the pre-season and
+ *  in-season plans (`plan` null), for a team without Vector Pro, or when the read failed. */
+export function MicroWeekEnough({ is, plan }: { is: boolean; plan: { week: PlanWeek; friendlies: { opener: string | null } | null } | null }) {
+  const week = plan?.week ?? null, friendlies = plan?.friendlies ?? null;
   const ws = week?.weekStart ?? null;
   const actual = useWeekEnoughActuals(ws, ws ? addDaysIso(ws, 6) : null);
   const today = new Date().toISOString().slice(0, 10);
-  const enough = React.useMemo(() => (week ? buildWeekEnough({ week, actual: actual.days, today }) : null), [week, actual.days, today]);
+  const enough = React.useMemo(() => (week ? buildWeekEnough({ week, actual: actual.days, today, friendlies }) : null), [week, actual.days, today, friendlies]);
   if (!week || actual.state === "not_available" || actual.state === "error") return null;
   return <div className="mt-3"><WeekEnoughCard is={is} enough={enough} loading={actual.state === "loading"} /></div>;
 }

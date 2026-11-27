@@ -59,7 +59,7 @@ import { NO_PROGRAMME, programmeCovers, programmeTitle } from "@/lib/micropulse/
 import { useStrengthDelivery } from "@/components/coach/useStrengthDelivery";
 import StrengthDeliveryNote from "@/components/coach/StrengthDeliveryNote";
 import { MESO_HORIZON, mesoSkeleton, planDayFromCal, planDaysFromCalWeek, CALTYPE_FOCUS_LABEL } from "@/lib/micropulse/periodization/mesoWeek";
-import { mesoCalWeekFor, mesoWeekFor as mesoWeekOf, preseasonInputFor, seasonMesoBlocks, teamCalendarUnit, assumedWeekMove } from "@/lib/micropulse/periodization/mesoSeed";
+import { mesoEnoughWeekFor, mesoWeekFor as mesoWeekOf, preseasonInputFor, seasonMesoBlocks, teamCalendarUnit, assumedWeekMove } from "@/lib/micropulse/periodization/mesoSeed";
 import { buildBlockEnough, buildWeekEnough } from "@/lib/micropulse/sessionEnough/weekEnough";
 import { useWeekEnoughActuals } from "@/components/coach/meso/useWeekEnough";
 import { BlockEnoughLine, MicroWeekEnough, WeekEnoughBadge } from "@/components/coach/meso/WeekEnough";
@@ -1231,6 +1231,17 @@ export default function PeriodizationHubPage() {
     });
   }, [plan, psSessT, psW1T, week1KpiT, mesoTailT, psTaperT, psGamesT, psAssumedT, blkUnit, campRegions, savedPlansT, preCadenceT, preBlockWeeksT, preBlockGoalsT, blkBase, blkStep, aerobicTest]);
   const preProp = React.useMemo(() => (preInput ? buildPreseasonProposal(preInput) : null), [preInput]);
+  // "Did we do enough?" for the pre-season's weeks: the same week rule, against the Pre-season tab's own fitted weeks,
+  // whose totals include the friendly, so the friendly counts on both sides (never the league opener).
+  const preEnoughCal = tab === "preseason" && !isPlayerScope && !isBasketball && preProp?.engine.cal.weeks.length ? preProp.engine.cal : null;
+  const preActuals = useWeekEnoughActuals(preEnoughCal?.weeks[0].weekStart ?? null, preEnoughCal ? isoAdd(preEnoughCal.weeks[preEnoughCal.weeks.length - 1].weekStart, 6) : null);
+  const preEnough = React.useMemo(() => {
+    if (!preEnoughCal || preActuals.state !== "ok") return null;
+    const today = new Date().toISOString().slice(0, 10);
+    const friendlies = { opener: preProp?.opener ?? null };
+    const weeks = preEnoughCal.weeks.map((w, i) => ({ weekNo: i + 1, enough: buildWeekEnough({ week: w, actual: preActuals.days, today, friendlies }) }));
+    return { weeks, block: buildBlockEnough(weeks), byWeek: new Map(weeks.map((w) => [w.enough.weekStart, w.enough])) };
+  }, [preEnoughCal, preActuals, preProp?.opener]);
 
   // MESO → MICRO (season-setup lota 4): the week the Meso pages show, in the shape Meso saves it (week_plans days).
   // Pre-season: the pre-season plan's week (with its assumed game). In-season: the Meso block calendar the In-season
@@ -2626,6 +2637,11 @@ export default function PeriodizationHubPage() {
               </div>
             );
           })()}
+          {preEnough?.block && (
+            <section className="min-w-0 overflow-hidden rounded-[14px] border border-[#e3e0d8] bg-white pb-3">
+              <BlockEnoughLine is={is} block={preEnough.block} weeks={preEnough.weeks} />
+            </section>
+          )}
           {ramp.map((w, i) => {
             const cw = cal.weeks[i];
             const weekMon = cw?.weekStart ?? isoAdd(preStart, i * 7);
@@ -2680,7 +2696,7 @@ export default function PeriodizationHubPage() {
                     {(cw?.days ?? []).map((d, di) => { const off = d.type === "rest"; const isM = d.type === "match"; const dl = dayLoad(d);
                       return <span key={di} title={`${dows[di]} · ${typeName(d.type)}${dl != null && !off ? ` · ${dl} PL` : ""}`} className="flex h-[22px] items-center justify-center rounded-[5px] font-mono text-[10px] font-semibold" style={off ? { background: "#f4f2ec", color: "#8a919c" } : { background: isM ? "#de9328" : typeColor[d.type] ?? "#64748B", color: "#fff" }}>{off ? "" : typeName(d.type).slice(0, 1)}</span>; })}
                   </span>
-                  <span className="justify-self-end">{confirmBadge(weekMon)}</span>
+                  <span className="flex items-center gap-1.5 justify-self-end"><WeekEnoughBadge is={is} enough={preEnough?.byWeek.get(weekMon) ?? null} />{confirmBadge(weekMon)}</span>
                   <svg className="hidden md:block" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4f5661" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
                 </button>
               </section>
@@ -2692,6 +2708,7 @@ export default function PeriodizationHubPage() {
                   {w.multipleOfMatch != null && <span className="text-[16px] font-bold tabular-nums text-[#14181c]" style={{ fontFamily: "var(--font-archivo, inherit)" }}>{w.multipleOfMatch}× <span className="font-sans text-[12px] font-medium text-slate-600">{is ? "leikur" : "a match"}</span></span>}
                   {w.taper && <span title={is ? "Létt vika fyrir fyrsta leik: toppvikan lækkuð, öll vikan um sama hlutfall og ákefð haldið. Bosquet 2007." : "Light week before the opener: the peak week cut, the whole week by one share, intensity kept. Bosquet 2007."} className="rounded-full bg-[#1c7a4a]/10 px-2 py-0.5 text-[11px] font-semibold text-[#1c7a4a]">{is ? "Létt vika" : "Taper"}</span>}
                   {(pv > 0 || w.perSessionLoad != null) && <span className="text-[13px] text-slate-600">{pv > 0 && <b className="font-semibold tabular-nums text-[#14181c]">{fmtv(pv)} {unitLabel}</b>}{w.perSessionLoad != null && <> · ≈ {w.perSessionLoad} {is ? "á æfingu" : "per session"}</>}</span>}
+                  <WeekEnoughBadge is={is} enough={preEnough?.byWeek.get(weekMon) ?? null} />
                   {confirmBadge(weekMon)}
                   <button type="button" onClick={openWeek} className="ml-auto text-[13px] font-semibold text-[#2740e6] hover:underline">{is ? "Opna í Vikuuppsetningu →" : "Open in Week Setup →"}</button>
                 </div>
@@ -3709,7 +3726,7 @@ export default function PeriodizationHubPage() {
               initialWeekStart={preseasonJumpWeek}
               onOpenTab={(t) => setTab(t)}
               mesoWeek={mesoWeekFor}
-              weekTotalSlot={isBasketball ? undefined : (ws) => <MicroWeekEnough is={is} week={mesoSeedCtx ? mesoCalWeekFor(mesoSeedCtx, ws) : null} />}
+              weekTotalSlot={isBasketball ? undefined : (ws) => <MicroWeekEnough is={is} plan={mesoSeedCtx ? mesoEnoughWeekFor(mesoSeedCtx, ws) : null} />}
               onAssumedGame={async (ws, date, action) => {
                 // "Enter as a friendly" writes the fixture (it then wins over the assumption everywhere); "No game this
                 // week" is the Pre-season page's own choice for the week (re-flowed + saved to week_plans).

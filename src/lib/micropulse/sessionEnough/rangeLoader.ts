@@ -17,8 +17,9 @@ import type { ActualDay } from "./weekEnough";
 
 /** Days before `from` read too, so a Monday top-up knows who started the weekend's match. */
 const MATCH_LOOKBACK_DAYS = 14;
-/** At most this many days per call (the hub's Meso horizon is 8 weeks). */
-export const MAX_RANGE_DAYS = 63;
+/** At most this many days per call: a whole pre-season (an Icelandic one runs from the off-season to the first game,
+ *  20+ weeks); the In-season Meso horizon is 8 weeks. The read stops at today, so a running pre-season reads less. */
+export const MAX_RANGE_DAYS = 182;
 
 const addDays = (iso: string, n: number) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 

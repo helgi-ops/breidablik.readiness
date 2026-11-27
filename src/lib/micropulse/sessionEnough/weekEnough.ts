@@ -79,6 +79,7 @@ export function plannedOf(d: PlanDay, k: WeekKey): number | null {
 }
 
 export type DayRole = "counted" | "extra" | "no_data" | "topup_few" | "upcoming" | "off" | "match";
+const FRIENDLY: Bi = { en: "Friendly", is: "Æfingaleikur" };
 export type WeekDayRow = {
   date: string; type: string; role: DayRole; players: number;
   /** Mean % of plan over the judged movement types with data (null when not counted). */
@@ -101,6 +102,8 @@ export type WeekEnough = {
   vars: WeekVarRow[];
   days: WeekDayRow[];
   sessions: { planned: number; elapsed: number; withData: number; extra: number };
+  /** Pre-season: the friendlies are in the week's total (planned = the plan's share of a match). */
+  friendlies: boolean;
   confidence: { level: "high" | "moderate" | "low"; note: Bi };
 };
 
@@ -129,9 +132,20 @@ function emptyByKey(): WeekDayRow["byKey"] {
   return Object.fromEntries(WEEK_KEYS.map((k) => [k, { planned: null, actual: null, counted: false }])) as WeekDayRow["byKey"];
 }
 
-/** The week's training against its plan. `today` (ISO): days before it count; today counts once it has data. */
-export function buildWeekEnough(input: { week: PlanWeek; actual: ActualDay[]; today: string }): WeekEnough {
+/** Day-type name for the text; a friendly when the week counts them. */
+export function dayTypeName(type: string, friendlies: boolean): Bi {
+  return friendlies && type === "match" ? FRIENDLY : DAY_TYPE_NAME[type] ?? { en: type, is: type };
+}
+
+/** The week's training against its plan. `today` (ISO): days before it count; today counts once it has data.
+ *  `friendlies` (pre-season): the plan's week total includes the friendly (the pre-season plan fits the training days
+ *  around it), so a friendly is compared like a session — planned = the plan's match-day numbers (a share of a match:
+ *  partial minutes), done = the squad median that day. The league opener (`friendlies.opener`) is never one. */
+export function buildWeekEnough(input: { week: PlanWeek; actual: ActualDay[]; today: string; friendlies?: { opener: string | null } | null }): WeekEnough {
   const { week, today } = input;
+  const fr = input.friendlies ?? null;
+  const isFriendly = (t: string, date: string) => !!fr && t === "match" && date !== fr.opener;
+  const sess = (t: string, date: string) => isSession(t) || isFriendly(t, date);
   const byDate = new Map(input.actual.map((a) => [a.date, a]));
   const days: WeekDayRow[] = [];
   const sums: Record<WeekKey, { p: number; a: number; n: number }> = Object.fromEntries(WEEK_KEYS.map((k) => [k, { p: 0, a: 0, n: 0 }])) as Record<WeekKey, { p: number; a: number; n: number }>;
@@ -140,13 +154,15 @@ export function buildWeekEnough(input: { week: PlanWeek; actual: ActualDay[]; to
   week.days.slice(0, 7).forEach((pd, i) => {
     const date = addDays(week.weekStart, i);
     const a = byDate.get(date) ?? null;
-    const has = !!a && !a.isMatch && a.players >= MIN_SESSION_PLAYERS;
+    const isS = sess(pd.type, date);
+    // In the pre-season a game day is data too (a friendly); otherwise a match day is never a session.
+    const has = !!a && (!a.isMatch || !!fr) && a.players >= MIN_SESSION_PLAYERS;
     const row: WeekDayRow = { date, type: pd.type, role: "off", players: a?.players ?? 0, pct: null, byKey: emptyByKey(), noGps: false };
-    for (const k of WEEK_KEYS) row.byKey[k].planned = isSession(pd.type) ? plannedOf(pd, k) : null;
+    for (const k of WEEK_KEYS) row.byKey[k].planned = isS ? plannedOf(pd, k) : null;
     const done = date < today || (date === today && has);
 
-    if (pd.type === "match" || a?.isMatch) { row.role = "match"; days.push(row); return; }
-    if (isSession(pd.type)) {
+    if ((pd.type === "match" && !isS) || (a?.isMatch && (!fr || date === fr.opener))) { row.role = "match"; days.push(row); return; }
+    if (isS) {
       planned++;
       if (!done) { row.role = "upcoming"; upcoming++; days.push(row); return; }
       elapsed++;
@@ -157,7 +173,7 @@ export function buildWeekEnough(input: { week: PlanWeek; actual: ActualDay[]; to
     const topup = pd.type === "topup";
     if (topup && a!.nonStarters < MIN_SESSION_PLAYERS) { row.role = "topup_few"; withData++; days.push(row); return; }
     const med = topup ? a!.medNonStarter : a!.med;
-    row.role = isSession(pd.type) ? "counted" : "extra";
+    row.role = isS ? "counted" : "extra";
     if (row.role === "counted") withData++; else extra++;
     const pcts: number[] = [];
     for (const k of WEEK_KEYS) {
@@ -183,7 +199,8 @@ export function buildWeekEnough(input: { week: PlanWeek; actual: ActualDay[]; to
   });
   const inProgress = upcoming > 0;
   const sessions = { planned, elapsed, withData, extra };
-  const base = { weekStart: week.weekStart, inProgress, vars, days, sessions, counterfactual: null, overNote: null };
+  const friendlyDays = days.map((d, i) => (isFriendly(d.type, d.date) ? i : -1)).filter((i) => i >= 0);
+  const base = { weekStart: week.weekStart, inProgress, vars, days, sessions, friendlies: !!fr, counterfactual: null, overNote: null };
 
   if (planned === 0 && extra === 0) return { ...base, state: "no_plan", verdict: null, facts: [], headline: { en: "No training planned this week.", is: "Engin æfing skipulögð í vikunni." }, confidence: { level: "low", note: { en: "Nothing to compare.", is: "Ekkert til að bera saman." } } };
   if (elapsed === 0 && extra === 0) return { ...base, state: "not_started", verdict: null, facts: [], headline: { en: `Not started yet: ${planned} sessions planned.`, is: `Ekki byrjuð: ${planned} æfingar skipulagðar.` }, confidence: { level: "low", note: { en: "No session has happened yet.", is: "Engin æfing búin enn." } } };
@@ -220,7 +237,7 @@ export function buildWeekEnough(input: { week: PlanWeek; actual: ActualDay[]; to
   const low = days.filter((d) => d.role === "counted" && d.pct != null && d.pct < 85).sort((a, b) => (a.pct ?? 0) - (b.pct ?? 0))[0];
   if (low) {
     const i = days.indexOf(low);
-    const tn = DAY_TYPE_NAME[low.type] ?? { en: low.type, is: low.type };
+    const tn = dayTypeName(low.type, !!fr);
     facts.push({ en: `${DOW[i].en} (${tn.en}) was furthest under: ${low.pct}% of its plan.`, is: `${DOW[i].is} (${tn.is}) var lengst undir: ${low.pct}% af sínu plani.` });
   }
   // 3 — coverage: what is in the total and what is not.
@@ -228,6 +245,8 @@ export function buildWeekEnough(input: { week: PlanWeek; actual: ActualDay[]; to
   const noData = nameDays("no_data"), extraDays = nameDays("extra"), few = nameDays("topup_few");
   const gpsDays = days.map((d, i) => (d.noGps ? DOW[i] : null)).filter((x): x is Bi => x != null);
   const parts: Bi[] = [{ en: `${withData} of ${elapsed} planned sessions with data`, is: `${withData} af ${elapsed} skipulögðum æfingum með gögn` }];
+  const frCounted = friendlyDays.filter((i) => days[i].role === "counted").map((i) => DOW[i]);
+  if (frCounted.length) parts.push({ en: `the friendly on ${listBi(frCounted, "en")} is in the total (planned as part of a match)`, is: `æfingaleikurinn ${listBi(frCounted, "is")} er í heildinni (planaður sem hluti af leik)` });
   if (noData.length) parts.push({ en: `no data from ${listBi(noData, "en")}, left out`, is: `engin gögn frá ${listBi(noData, "is")}, ekki talið` });
   if (few.length) parts.push({ en: `${listBi(few, "en")} top-up not judged (too few non-starters)`, is: `áfylling ${listBi(few, "is")} ekki metin (of fáir sem byrjuðu ekki)` });
   if (extraDays.length) parts.push({ en: `extra session on ${listBi(extraDays, "en")} (planned off), counted`, is: `aukaæfing ${listBi(extraDays, "is")} (planað frí), talin með` });
