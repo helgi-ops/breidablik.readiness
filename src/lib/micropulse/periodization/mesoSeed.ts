@@ -74,7 +74,7 @@ export function preseasonInputFor(plan: SeedPlan, o: {
   cadence: number; blockWeeks: Record<string, number>; blockGoals: Record<string, string>; baseOverloadPct: number; stepPct: number; aerobicMode: AerobicMode;
 }): PreseasonProposalInput {
   return {
-    phases: plan.phases, today: o.today, nextFirstFixture: plan.nextFirstFixture, nextFirstFixtureEstimated: plan.nextFirstFixtureEstimated,
+    phases: plan.phases, today: o.today, nextFirstFixture: plan.nextFirstFixture, nextFirstFixtureEstimated: plan.nextFirstFixtureEstimated, fixturesEstimated: plan.fixturesEstimated,
     saved: null, settingsOverride: o.settings,
     matchUnits: plan.players.map((p) => p.matchUnit as MatchUnit), matchLoad: plan.matchLoad, matchSrpe: plan.matchSrpe, loadSource: plan.tier.loadSource,
     unit: o.unit, fixtures: [...(plan.fixtures ?? []), ...(plan.upcomingFixtures ?? [])], camps: o.camps, savedDays: o.savedDays,

@@ -47,6 +47,8 @@ export type PreseasonProposalInput = {
   nextFirstFixture?: string | null;
   /** The opener is an ESTIMATE (last season's + 1 year) — named as a gap. */
   nextFirstFixtureEstimated?: boolean;
+  /** THIS season's fixtures are an estimate — the opener of a pre-season before this season's first game is then too. */
+  fixturesEstimated?: boolean;
   /** The coach set the pre-season start date himself (season_plans.overrides.nextPreseasonStart). */
   startSetByCoach?: boolean;
   /** The saved row for the season this pre-season opens; null/undefined = nothing saved. */
@@ -116,6 +118,10 @@ export type ProposalWeek = {
 
 export type PreseasonProposal = {
   window: PreseasonWindow & { end: string };
+  /** The first league game this pre-season leads into (null = not entered) and whether it is an estimate.
+   *  THIS season's first game before the season starts; the NEXT season's from the off-season on. */
+  opener: string | null;
+  openerEstimated: boolean;
   verdict: Bi;
   facts: Bi[];
   confidence: { level: Confidence; anchor: PreseasonAnchor["anchor"]; coachChoices: number; totalChoices: number; note: Bi };
@@ -136,6 +142,7 @@ const MON_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 const MON_IS = ["jan", "feb", "mar", "apr", "maí", "jún", "júl", "ágú", "sep", "okt", "nóv", "des"];
 const dEn = (iso: string) => `${Number(iso.slice(8, 10))} ${MON_EN[Number(iso.slice(5, 7)) - 1]}`;
 const dIs = (iso: string) => `${Number(iso.slice(8, 10))}. ${MON_IS[Number(iso.slice(5, 7)) - 1]}`;
+const OPENER_LABEL: Bi = { en: "First league game", is: "Fyrsti deildarleikur" };
 const num = (n: number, is: boolean) => (is ? String(n).replace(".", ",") : String(n));
 
 /** Build the pre-season proposal. Returns null when there's no pre-season to plan (no phases yet). */
@@ -146,6 +153,12 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
   const preEndMs = ms(preStart) + preWeeks * 7 * DAY;
   const preEndIso = up.end ?? new Date(preEndMs).toISOString().slice(0, 10);
   const inWindow = (iso: string) => iso >= preStart && ms(iso) < preEndMs;
+  // The league game this pre-season leads into = the window's end: THIS season's first competitive game
+  // (the detected pre-season ends on it) or, from the off-season on, the NEXT season's (`nextFirstFixture`).
+  // It is never a friendly, even when it falls inside the window.
+  const opener = up.end ?? null;
+  const openerIsNext = !!input.nextFirstFixture && opener === input.nextFirstFixture;
+  const openerEstimated = opener != null && (openerIsNext ? !!input.nextFirstFixtureEstimated : !!input.fixturesEstimated);
 
   // The coach's choices (or none, from scratch). A live override (the hub's state) wins for the numbers.
   const savedSettings = preseasonSettingsFrom(input.fromScratch ? null : input.saved);
@@ -185,7 +198,7 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
   // gets an assumed Saturday game; before it (and when no date is set) a week without a game is a
   // training week. The assumed games also label the days (MD-3, MD+1…). The user's rule, 2026-11-25.
   // Not set → from the first entered friendly (the user's rule 2026-11-25); "none" → only the entered games.
-  const firstFriendly = fixtures.find((f) => f !== input.nextFirstFixture) ?? null;
+  const firstFriendly = fixtures.find((f) => f !== opener) ?? null;
   const gamesOff = settings.gamesFrom === GAMES_FROM_NONE;
   const gamesFrom = gamesOff ? null : (settings.gamesFrom ?? firstFriendly);
   const gamesFromBy: PreseasonProposal["weekendGames"]["by"] = gamesOff ? "off" : settings.gamesFrom ? "coach" : firstFriendly ? "first_friendly" : "no_friendly";
@@ -267,7 +280,11 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
   // Each week's days sum to the week's planned total, per variable: the friendly counts as it is and the
   // training days share the rest in the calendar's proportions — add a session and the others get lighter.
   // The taper week (last, light) is fitted to the ramp's taper total like any other week.
-  const cal: CalendarBlock = { ...rawCal, weeks: rawCal.weeks.map((w, i) => (ramp[i] ? fitWeekToTarget(w, ramp[i], input.unit).week : w)) };
+  const fitted: CalendarBlock = { ...rawCal, weeks: rawCal.weeks.map((w, i) => (ramp[i] ? fitWeekToTarget(w, ramp[i], input.unit).week : w)) };
+  // The opener's day is the first league game, not a friendly.
+  const cal: CalendarBlock = !opener ? fitted : { ...fitted, weeks: fitted.weeks.map((w) => ({
+    ...w, days: w.days.map((d, di) => (d.type === "match" && isoAdd(w.weekStart, di) === opener ? { ...d, label: OPENER_LABEL } : d)),
+  })) };
 
   // Meso blocks. With the season row's block lengths (the hub passes them): the SAME slicing the strength delivery
   // reads (buildMesoBlocks → blockFromPlan) — cadence-long blocks from the pre-season start, the coach's lengths
@@ -314,7 +331,7 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
       weekIndex: i + 1, weekStart, mult: cw?.mult ?? 1, isDeload: !!cw?.isDeload,
       goalKey: goalOfWeek(weekStart),
       target: w,
-      friendlies: fixtures.filter((d) => d >= weekStart && d < isoAdd(weekStart, 7)),
+      friendlies: fixtures.filter((d) => d !== opener && d >= weekStart && d < isoAdd(weekStart, 7)),
       assumedGame: assumedBy.get(weekStart) ?? null,
       noGameByCoach: noGameWeeks.has(weekStart),
       tests: testPlans.filter((tp) => tp.weeks.includes(i + 1)).map((tp) => tp.protocol.key),
@@ -419,12 +436,12 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
   ];
 
   // Friendlies = the games in the window other than the league opener (it can fall on the window's last day).
-  const friendlyCount = fixtures.filter((f) => f !== input.nextFirstFixture).length;
+  const friendlyCount = fixtures.filter((f) => f !== opener).length;
   // ─── Gaps: named, never guessed ───
   const gaps: Bi[] = [];
   if (!anchor.hasOwnKpi) gaps.push({ en: "No match data of your own yet — the loads are reference values for adult football. Set week 1 per variable, or add GPS.", is: "Engin eigin leikgögn enn — álagið eru viðmiðunargildi fyrir fullorðinsfótbolta. Stilltu viku 1 á hverja breytu eða bættu við GPS." });
   if (!up.end) gaps.push({ en: "First competitive game not entered — the length is last pre-season's.", is: "Fyrsti keppnisleikur ekki skráður — lengdin er lengd síðasta undirbúnings." });
-  else if (input.nextFirstFixtureEstimated) gaps.push({ en: `First game is an estimate (${dEn(end)}) — enter the real date and the plan re-flows.`, is: `Fyrsti leikur er áætlaður (${dIs(end)}) — skráðu rétta dagsetningu og planið uppfærist.` });
+  else if (openerEstimated) gaps.push({ en: `First game is an estimate (${dEn(end)}) — enter the real date and the plan re-flows.`, is: `Fyrsti leikur er áætlaður (${dIs(end)}) — skráðu rétta dagsetningu og planið uppfærist.` });
   const assumedMatches = assumed.length;
   if (friendlyCount === 0) gaps.push(assumedMatches
     ? { en: `No friendlies entered — the calendar assumes a Saturday game in ${assumedMatches} weeks from ${dEn(gamesFrom ?? assumed[0])}. Enter the friendlies and the days re-flow around them.`, is: `Engir æfingaleikir skráðir — dagatalið gerir ráð fyrir leik á laugardegi í ${assumedMatches} vikum frá ${dIs(gamesFrom ?? assumed[0])}. Skráðu æfingaleikina og dagarnir raðast í kringum þá.` }
@@ -455,7 +472,7 @@ export function buildPreseasonProposal(input: PreseasonProposalInput): Preseason
   };
 
   return {
-    window: { start: preStart, weeks: preWeeks, end },
+    window: { start: preStart, weeks: preWeeks, end }, opener, openerEstimated,
     verdict, facts, confidence, choices, weeks, blocks,
     tests: testPlans.map((tp) => ({ key: tp.protocol.key, name: tp.protocol.name, weeks: tp.weeks, priority: tp.priority, cite: tp.protocol.cite })),
     gaps, settings, weekendGames: { from: gamesFrom, by: gamesFromBy },

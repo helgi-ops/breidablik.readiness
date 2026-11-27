@@ -145,6 +145,30 @@ describe("buildPreseasonProposal — a team without data", () => {
     expect(p.gaps.map((g) => g.en).join(" ")).toMatch(/estimate/);
   });
 
+  it("before this season starts, the opener is THIS season's first league game — not a friendly, not the next season's estimate", () => {
+    // Breiðablik 2027 (bug 2026-11-27): the 2028 opener is an estimate, the 10 Apr 2027 league game is real.
+    const PH: SeasonPhase[] = [phase("preseason", "2026-11-30", "2027-04-10", 19), phase("competitive", "2027-04-10", "2027-10-26", 28), phase("offseason", "2027-10-27", "2028-01-05", 10)];
+    const p = buildPreseasonProposal(base({ phases: PH, today: "2026-11-27", nextFirstFixture: "2028-04-10", nextFirstFixtureEstimated: true, fixturesEstimated: false,
+      saved: null, savedDays: {}, fixtures: ["2027-01-08", "2027-01-23", "2027-04-10"] }))!;
+    expect(p.opener).toBe("2027-04-10");
+    expect(p.openerEstimated).toBe(false);
+    expect(p.weeks.flatMap((w) => w.friendlies)).toEqual(["2027-01-08", "2027-01-23"]);
+    expect(p.facts.map((f) => f.en).join(" ")).toMatch(/2 friendlies in the plan/);
+    expect(p.gaps.map((g) => g.en).join(" ")).not.toMatch(/estimate/);
+    const openerDay = p.weeks.flatMap((w) => w.days).find((d) => d.date === "2027-04-10")!;
+    expect(openerDay.type).toBe("match");
+    expect(openerDay.label.en).toBe("First league game");
+    const friendlyDay = p.weeks.flatMap((w) => w.days).find((d) => d.date === "2027-01-08")!;
+    expect(friendlyDay.label.en).toBe("FRIENDLY (match)");
+  });
+
+  it("from the off-season on, the opener is the NEXT season's first game (estimated when it is)", () => {
+    const p = buildPreseasonProposal(base({ nextFirstFixtureEstimated: true }))!;
+    expect(p.opener).toBe(OPENER);
+    expect(p.openerEstimated).toBe(true);
+    expect(p.weeks.flatMap((w) => w.friendlies)).not.toContain(OPENER);
+  });
+
   it("no phases → nothing to propose", () => {
     expect(buildPreseasonProposal(base({ phases: [] }))).toBeNull();
   });

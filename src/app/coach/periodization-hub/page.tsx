@@ -37,7 +37,7 @@ import { preseasonVariableRows } from "@/lib/micropulse/periodization/preseasonV
 import { strengthConfigForPhase, type SeasonPhaseKey, type CoachStrengthRules } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { preseasonStrengthWeeks, schemeHead } from "@/lib/micropulse/strengthProgramming/preseasonStrength";
 import { STRUCTURE_LABEL, sanitizeMdStructures, type MdStructures, type NoMatchWeek } from "@/lib/micropulse/strengthProgramming/structures";
-import { preseasonMatchExposure, NORMATIVE_MATCH_KPI, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
+import { preseasonMatchExposure, NORMATIVE_MATCH_KPI, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
 import { weeklyTargetFromMatch } from "@/lib/micropulse/periodization";
 import { upcomingInternationalBreaks, intlBreakKey, type IntlBreak } from "@/lib/micropulse/internationalBreaks";
 import { standardTrainingDays, weeklyKpiMultiple, kpiPathway, matchesPerWeek, kpiTmRefRange } from "@/lib/micropulse/periodization/plannedVolume";
@@ -1452,7 +1452,7 @@ export default function PeriodizationHubPage() {
     const { preseasonStart, weeklyLoad } = preseasonRampPdf(ramp, prop.engine.anchor.anchor, prop.engine.anchor.kpi, prop.engine.anchor.kpi, prop.window.start, is);
     await downloadPeriodizationPreseasonPdf({
       teamName: plan.teamName, generatedAt: new Date().toISOString(),
-      opener: plan.nextFirstFixture ?? null, openerEstimated: !!plan.nextFirstFixtureEstimated,
+      opener: prop.opener, openerEstimated: prop.openerEstimated,
       prop, baseBlocks: prop.engine.meso.base.length, variables, preseasonStart, weeklyLoad,
       dayDrills: await dayDrillsFor(prop.engine.cal, "preseason"),
     }, is ? "IS" : "EN");
@@ -2435,7 +2435,7 @@ export default function PeriodizationHubPage() {
             const seqTotal = preBlocks.reduce((s, b) => s + weeksBetween(b.start, blockEndExcl(b)), 0);
             return (<div className="space-y-4">
           {/* The pre-season at a glance: verdict → 4 facts → week-by-week load + meso cycles (its own provenance chip). */}
-          <PreseasonReadsFrom is={is} prop={prop} opener={plan.nextFirstFixture ?? null} openerEstimated={!!plan.nextFirstFixtureEstimated}
+          <PreseasonReadsFrom is={is} prop={prop} opener={prop.opener} openerEstimated={prop.openerEstimated}
             onOpenMacro={() => setTab("season")} baseBlocks={prop.engine.meso.base.length}
             onExport={() => void runTabPdf("preseason", exportPreseason)} exporting={tabPdfBusy === "preseason"} />
 
