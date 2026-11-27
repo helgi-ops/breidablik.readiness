@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { buildPreseasonProposal } from "../preseasonProposal";
 import { type MatchUnit, type SeasonPhase } from "../index";
-import { assumedWeekMove, mesoSeedFromEcho, mesoWeekFor, preseasonInputFor, seasonMesoBlocks, teamCalendarUnit, type SeedPlan } from "../mesoSeed";
+import { assumedWeekMove, mesoCalWeekFor, mesoSeedFromEcho, mesoWeekFor, preseasonInputFor, seasonMesoBlocks, teamCalendarUnit, type SeedPlan } from "../mesoSeed";
 import { planDaysFromCalWeek } from "../mesoWeek";
+import { inSeasonKpiMultiple } from "../inSeasonStandardWeek";
 
 const m = (typical: number | null) => ({ typical, peak: typical });
 const UNIT = {
@@ -59,6 +60,21 @@ describe("mesoSeedFromEcho — the standalone page reads the week the hub's Micr
     // The block list is the hub's (same slicing call).
     expect(s.ctx.mesoBlocks).toEqual(seasonMesoBlocks(PLAN, { cadence: 4, teamBreaks: [], offseasonStart: null, blockWeeks: {}, blockDeload: {} }));
     expect(mesoWeekFor(s.ctx, "2025-01-06")).toBeNull();
+  });
+
+  it("mesoCalWeekFor = the same in-season week with numbers, the coach's − / + applied; pre-season → null", () => {
+    const ws = "2026-04-20";
+    const cw = mesoCalWeekFor(s.ctx, ws)!;
+    expect(cw.weekStart).toBe(ws);
+    expect(planDaysFromCalWeek(cw)).toEqual(mesoWeekFor(s.ctx, ws)!.days);
+    const mech = cw.days.findIndex((d) => d.type !== "rest" && d.type !== "match" && (d.accel ?? 0) > 0);
+    expect(mech).toBeGreaterThanOrEqual(0);
+    const b = s.ctx.mesoBlocks.find((x) => x.start <= ws && ws < x.end)!;
+    // Twice the proposal's accelerations for the block → every day's planned accelerations doubles; others unchanged.
+    const doubled = mesoCalWeekFor({ ...s.ctx, blockKpi: { [b.start]: { imaAccel: 2 * inSeasonKpiMultiple("imaAccel", 1) } } }, ws)!;
+    expect(doubled.days[mech].accel).toBeCloseTo(2 * cw.days[mech].accel!, 0);
+    expect(doubled.days[mech].decel).toBe(cw.days[mech].decel);
+    expect(mesoCalWeekFor(s.ctx, "2026-03-02")).toBeNull();
   });
 
   it("'No game this week' re-flows the week with no game", () => {

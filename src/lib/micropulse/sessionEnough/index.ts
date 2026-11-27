@@ -281,7 +281,7 @@ const listBi = (keys: EnoughVar[], lang: "en" | "is"): string => {
  * Verdict from a set of per-variable statuses — same rule for a player and for the team. When only one variable
  * could be judged (Locomotive with no sprint reading) it decides alone: under → partly, well under → short.
  */
-function verdictOf(statuses: PvaStatus[], minJudged = 2): "enough" | "partly" | "short" | null {
+export function verdictOf(statuses: PvaStatus[], minJudged = 2): "enough" | "partly" | "short" | null {
   const judged = statuses.filter((s) => s !== "na");
   if (judged.length < minJudged || judged.length === 0) return null;
   if (judged.length === 1) return judged[0] === "well_under" ? "short" : isShort(judged[0]) ? "partly" : "enough";

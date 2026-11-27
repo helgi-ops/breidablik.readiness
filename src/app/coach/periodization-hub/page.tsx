@@ -59,7 +59,10 @@ import { NO_PROGRAMME, programmeCovers, programmeTitle } from "@/lib/micropulse/
 import { useStrengthDelivery } from "@/components/coach/useStrengthDelivery";
 import StrengthDeliveryNote from "@/components/coach/StrengthDeliveryNote";
 import { MESO_HORIZON, mesoSkeleton, planDayFromCal, planDaysFromCalWeek, CALTYPE_FOCUS_LABEL } from "@/lib/micropulse/periodization/mesoWeek";
-import { mesoWeekFor as mesoWeekOf, preseasonInputFor, seasonMesoBlocks, teamCalendarUnit, assumedWeekMove } from "@/lib/micropulse/periodization/mesoSeed";
+import { mesoCalWeekFor, mesoWeekFor as mesoWeekOf, preseasonInputFor, seasonMesoBlocks, teamCalendarUnit, assumedWeekMove } from "@/lib/micropulse/periodization/mesoSeed";
+import { buildBlockEnough, buildWeekEnough } from "@/lib/micropulse/sessionEnough/weekEnough";
+import { useWeekEnoughActuals } from "@/components/coach/meso/useWeekEnough";
+import { BlockEnoughLine, MicroWeekEnough, WeekEnoughBadge } from "@/components/coach/meso/WeekEnough";
 import PreseasonReadsFrom, { AddGame } from "@/components/coach/PreseasonReadsFrom";
 import { THREE_IN_A_ROW_RULE } from "@/lib/micropulse/weekSetup/weekRules";
 import { MacroSetupChecklist, MacroFixturesCard, MacroBreaksCard, MacroSetupGate, firstLeagueGame, type MacroFixture } from "@/components/coach/MacroSetupCards";
@@ -973,6 +976,18 @@ export default function PeriodizationHubPage() {
     [isPlayerScope, playerBlock, calBlock],
   );
 
+  // "Did we do enough?" for the block: each week's training (squad medians per session, read once for the block)
+  // against the calendar's own plan for that week. Team scope, in-season football only (the read is gated on Vector
+  // Pro and says not_available otherwise). Rules decide (sessionEnough/weekEnough); never the readiness colour.
+  const enoughBlock = tab === "plan" && !isPlayerScope && !blkIsPreseason && !isBasketball && mesoCalBlock?.weeks.length ? mesoCalBlock : null;
+  const blockActuals = useWeekEnoughActuals(enoughBlock?.weeks[0].weekStart ?? null, enoughBlock ? isoAdd(enoughBlock.weeks[enoughBlock.weeks.length - 1].weekStart, 6) : null);
+  const blockEnough = React.useMemo(() => {
+    if (!enoughBlock || blockActuals.state !== "ok") return null;
+    const today = new Date().toISOString().slice(0, 10);
+    const weeks = enoughBlock.weeks.map((w, i) => ({ weekNo: i + 1, enough: buildWeekEnough({ week: w, actual: blockActuals.days, today }) }));
+    return { weeks, block: buildBlockEnough(weeks), byWeek: new Map(weeks.map((w) => [w.enough.weekStart, w.enough])) };
+  }, [enoughBlock, blockActuals]);
+
   // Build-up TRACKING block — the CURRENT build-up (active Meso block, past→now)
   // on the steer-independent neutral ramp. Retrospective adherence asks "did
   // actual load follow the planned MAGNITUDE ramp?", so it tracks the block
@@ -1221,7 +1236,8 @@ export default function PeriodizationHubPage() {
   // Pre-season: the pre-season plan's week (with its assumed game). In-season: the Meso block calendar the In-season
   // page builds for the team (block opened at its start, same goal / unload / hold / skeleton). Micro seeds an
   // unsaved week from it; null = the week is outside both (Micro falls back to its match-anchored grid).
-  const mesoWeekFor = (ws: string) => (plan ? mesoWeekOf({ plan, preProp, mesoBlocks, blockGoals, cadence, unit: teamCalendarUnit(plan.teamBaseline?.avg), baseOverloadPct: blkBase, stepPct: blkStep, savedPlans, teamBreaks, camps: campRegions }, ws) : null);
+  const mesoSeedCtx = plan ? { plan, preProp, mesoBlocks, blockGoals, cadence, unit: teamCalendarUnit(plan.teamBaseline?.avg), baseOverloadPct: blkBase, stepPct: blkStep, savedPlans, teamBreaks, camps: campRegions, blockKpi, sport: teamSport } : null;
+  const mesoWeekFor = (ws: string) => (mesoSeedCtx ? mesoWeekOf(mesoSeedCtx, ws) : null);
 
   // Week confirmation status (Micro "Confirm week → players") — badges on the Meso week cards.
   const [weekConfirm, setWeekConfirm] = React.useState<Record<string, WeekConfirmStatus>>({});
@@ -3188,6 +3204,7 @@ export default function PeriodizationHubPage() {
           {/* 1 — THE BLOCK AT A GLANCE: verdict → four facts → the block's weeks → the season to pick another block. */}
           {!selIsPre && (
           <InSeasonBlockSummary
+            enough={<BlockEnoughLine is={is} block={blockEnough?.block ?? null} weeks={blockEnough?.weeks ?? []} />}
             eyebrow={`${sel ? (is ? sel.phase.is : sel.phase.en) : (is ? "Keppnistímabil" : "In-season")} ${plan.seasonYear}${sel ? ` · ${is ? `Lota ${selIdx + 1} af ${seasonBlocks.length}` : `Block ${selIdx + 1} of ${seasonBlocks.length}`}` : ""}`}
             title={sel ? (is ? `${sel.weeks} vikna lota — ${goalName(selGoal)}` : `${sel.weeks}-week block — ${goalName(selGoal)}`) : (is ? "Veldu lotu" : "Pick a block")}
             subLine={sel && (
@@ -3521,6 +3538,7 @@ export default function PeriodizationHubPage() {
                 });
                 const badge = (
                   <span className="flex flex-wrap items-center justify-end gap-1.5">
+                    <WeekEnoughBadge is={is} enough={blockEnough?.byWeek.get(mon) ?? null} />
                     {breaks.length > 0 && <span className="rounded-full bg-[#de9328]/15 px-2 py-0.5 text-[11px] font-semibold text-[#7a4a06]">⚠ {breaks.length} {is ? "gegn reglu" : "against a rule"}</span>}
                     {noProg && <span className="text-[11px] font-semibold text-[#8a5a12]" title={is ? NO_PROGRAMME.is : NO_PROGRAMME.en}>⚠ {is ? "ekkert kerfi" : "no programme"}</span>}
                     {confirmBadge(mon)}
@@ -3691,6 +3709,7 @@ export default function PeriodizationHubPage() {
               initialWeekStart={preseasonJumpWeek}
               onOpenTab={(t) => setTab(t)}
               mesoWeek={mesoWeekFor}
+              weekTotalSlot={isBasketball ? undefined : (ws) => <MicroWeekEnough is={is} week={mesoSeedCtx ? mesoCalWeekFor(mesoSeedCtx, ws) : null} />}
               onAssumedGame={async (ws, date, action) => {
                 // "Enter as a friendly" writes the fixture (it then wins over the assumption everywhere); "No game this
                 // week" is the Pre-season page's own choice for the week (re-flowed + saved to week_plans).

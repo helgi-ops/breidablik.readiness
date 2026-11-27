@@ -421,12 +421,14 @@ type WeekSetupViewProps = {
   mesoWeek?: (weekStart: string) => MesoWeekSeed | null;
   /** Act on an assumed (not entered) game in the week: enter it as a friendly, or take the game out of the week. */
   onAssumedGame?: (weekStart: string, date: string, action: "friendly" | "none") => Promise<void>;
+  /** The week's outcome, shown under the week strip ("Did we do enough this week?") — supplied by the hub. */
+  weekTotalSlot?: (weekStart: string) => ReactNode;
 };
 export type { MesoWeekSeed };
 
 // Rendered by /coach/week-setup (standalone) and by the Periodization Hub's "Micro Cycle" tab
 // (embedded, with the Macro/Meso spine passed in) — one macro→meso→micro flow.
-export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOpenTab, initialWeekStart, mesoWeek, onAssumedGame }: WeekSetupViewProps = {}) {
+export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOpenTab, initialWeekStart, mesoWeek, onAssumedGame, weekTotalSlot }: WeekSetupViewProps = {}) {
   const { isAtLeastPro } = usePlan();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -2052,6 +2054,8 @@ export default function WeekSetupView({ embedded = false, spine, rulesSlot, onOp
           </div>
         </div>
       )}
+
+      {weekTotalSlot?.(weekStart)}
 
       {/* How the strength reaches the players (the team's send mode); standard: does a Custom Programme cover the week? */}
       {teamId && <StrengthDeliveryNote delivery={delivery} season={goalSeasonOfPhase(seasonPhase)} is={isIS} className="mt-3" />}

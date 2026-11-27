@@ -12,7 +12,7 @@ import { MESO_CARD, MesoFlowChip, MesoHeadline, MesoLoadBars, MesoTile, MesoTile
 
 export type InSeasonTile = { label: string; value: React.ReactNode; sub: React.ReactNode; warn?: boolean };
 
-export default function InSeasonBlockSummary({ eyebrow, title, subLine, actions, flow, tiles, barsTitle, legend, bars, barsNote, strip, warnings, status }: {
+export default function InSeasonBlockSummary({ eyebrow, title, subLine, actions, flow, tiles, enough, barsTitle, legend, bars, barsNote, strip, warnings, status }: {
   eyebrow: string;
   title: React.ReactNode;
   /** Dates, pills and the "change in Macro" link under the headline. */
@@ -21,6 +21,8 @@ export default function InSeasonBlockSummary({ eyebrow, title, subLine, actions,
   actions: React.ReactNode;
   flow: { readsLabel: string; reads: string; flowsLabel: string; flows: string };
   tiles: InSeasonTile[];
+  /** "Did we do enough?" for the block so far (one line + details) — under the four facts. */
+  enough?: React.ReactNode;
   barsTitle: string;
   legend: React.ReactNode;
   bars: MesoBar[];
@@ -50,6 +52,7 @@ export default function InSeasonBlockSummary({ eyebrow, title, subLine, actions,
           {tiles.map((x, i) => <MesoTile key={i} label={x.label} value={x.value} sub={x.sub} warn={x.warn} />)}
         </MesoTileGrid>
       )}
+      {enough}
 
       {/* The block week by week, then the season to pick another block */}
       <div className="flex flex-col gap-2.5 px-5 pb-6 pt-5 sm:px-7">

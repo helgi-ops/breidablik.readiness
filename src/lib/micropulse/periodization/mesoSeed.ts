@@ -8,7 +8,8 @@
  * Pure. No new numbers or rules — the hub's own derivations, moved here so both pages read the same week.
  */
 
-import { buildMesoBlocks, blockDeloadOf, holdsStandardWeek, inSeasonRange, type MatchUnit, type MatchUnitAbs, type MesoBlock } from "./index";
+import { buildMesoBlocks, blockDeloadOf, holdsStandardWeek, inSeasonRange, type CalendarBlock, type CalWeek, type MatchUnit, type MatchUnitAbs, type MesoBlock } from "./index";
+import { applyBlockKpiToCalendar, type BlockKpiMap } from "./inSeasonKpiAdjust";
 import { buildPreseasonProposal, type CampRegion, type PreseasonProposal, type PreseasonProposalInput, type SavedDay } from "./preseasonProposal";
 import { preseasonSeasonYear, plansNextSeason, preseasonSettingsFrom, type PreseasonSavedRow } from "./preseasonWindow";
 import { DEFAULT_AEROBIC_TEST, aerobicModeOf, type AerobicMode } from "./testingSchedule";
@@ -96,16 +97,16 @@ export type MesoSeedContext = {
   savedPlans: Record<string, SavedDay>;
   teamBreaks: Breaks;
   camps: CampRegion[];
+  /** The coach's per-variable setting per in-season block (keyed by block start) — only the numbers read it
+   *  (mesoCalWeekFor); the day types never change with it. */
+  blockKpi?: BlockKpiMap;
+  sport?: string | null;
 };
 
-/** The Meso week for a Monday, as week_plans days — null when the week is outside the pre-season plan and the
- *  in-season Meso window (Micro then falls back to its match-anchored grid). */
-export function mesoWeekFor(ctx: MesoSeedContext, ws: string): MesoWeekSeed | null {
-  const { plan, preProp } = ctx;
-  if (plan.phases.length === 0) return null;
-  const pw = preProp?.weeks.find((w) => w.weekStart === ws);
-  const pcw = preProp?.engine.cal.weeks.find((w) => w.weekStart === ws);
-  if (pw && pcw) return { source: "preseason", days: planDaysFromCalWeek(pcw), assumedGame: pw.assumedGame };
+/** The in-season Meso block calendar for the week `ws` (the block opened at its start, as the In-season page does),
+ *  and the block. Null outside the in-season Meso window. */
+function inSeasonCalFor(ctx: MesoSeedContext, ws: string): { cal: CalendarBlock; block: MesoBlock } | null {
+  const { plan } = ctx;
   const ph = plan.phases.find((p) => p.start <= ws && ws < p.end);
   if (!ph || ph.key === "preseason") return null;
   const b = ctx.mesoBlocks.find((x) => x.start <= ws && ws < x.end);
@@ -124,6 +125,30 @@ export function mesoWeekFor(ctx: MesoSeedContext, ws: string): MesoWeekSeed | nu
     seed: { ...common, startDate: b.start, numWeeks: MESO_HORIZON }, savedPlans: ctx.savedPlans, teamBreaks: ctx.teamBreaks,
     calendar: { ...common, startDate: b.start, numWeeks: nWeeks, scopePos: null, phase: bPhase, camps: ctx.camps },
   });
+  return { cal, block: b };
+}
+
+/** The in-season week as the Meso page plans it, with numbers: the calendar week with the block's per-variable
+ *  setting applied (applyBlockKpiToCalendar, as the In-season page does). Null outside the in-season window (the
+ *  pre-season has its own plan). What "Did we do enough?" for the week compares against. */
+export function mesoCalWeekFor(ctx: MesoSeedContext, ws: string): CalWeek | null {
+  const r = inSeasonCalFor(ctx, ws);
+  if (!r) return null;
+  applyBlockKpiToCalendar(r.cal, ctx.blockKpi?.[r.block.start], ctx.sport);
+  return r.cal.weeks.find((w) => w.weekStart === ws) ?? null;
+}
+
+/** The Meso week for a Monday, as week_plans days — null when the week is outside the pre-season plan and the
+ *  in-season Meso window (Micro then falls back to its match-anchored grid). */
+export function mesoWeekFor(ctx: MesoSeedContext, ws: string): MesoWeekSeed | null {
+  const { plan, preProp } = ctx;
+  if (plan.phases.length === 0) return null;
+  const pw = preProp?.weeks.find((w) => w.weekStart === ws);
+  const pcw = preProp?.engine.cal.weeks.find((w) => w.weekStart === ws);
+  if (pw && pcw) return { source: "preseason", days: planDaysFromCalWeek(pcw), assumedGame: pw.assumedGame };
+  const r = inSeasonCalFor(ctx, ws);
+  if (!r) return null;
+  const cal = r.cal;
   const cw = cal.weeks.find((w) => w.weekStart === ws);
   return cw ? { source: "inseason", days: planDaysFromCalWeek(cw), assumedGame: null } : null;
 }
