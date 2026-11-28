@@ -11,7 +11,7 @@ import ShowDetails from "@/components/common/ShowDetails";
 import { useLang } from "@/lib/lang";
 import type { PvaStatus } from "@/lib/micropulse/loadPlan/plannedVsActual";
 import {
-  ENOUGH_LABEL, ENOUGH_TECH, ENOUGH_VARS, DAY_TYPE_LABEL, isContextOnly,
+  ENOUGH_LABEL, ENOUGH_TECH, ENOUGH_VARS, DAY_TYPE_LABEL, FMP_BANDS, FMP_LABEL, FMP_TECH, isContextOnly,
   type SessionEnough, type PlayerVerdict, type TeamVerdict,
 } from "@/lib/micropulse/sessionEnough";
 
@@ -48,6 +48,8 @@ const CONF: Record<"high" | "moderate" | "low", { word: Bi; tone: string }> = {
 };
 
 const fmt = (n: number | null) => (n == null ? "—" : Math.round(n).toLocaleString("en-US"));
+/** Seconds → m:ss (Football Movement Profile time). */
+const fmtDur = (s: number | null) => (s == null ? "—" : `${Math.floor(Math.round(s) / 60)}:${String(Math.round(s) % 60).padStart(2, "0")}`);
 
 export default function SessionEnoughCard({ enough }: { enough: SessionEnough | null }) {
   const [lang] = useLang();
@@ -157,6 +159,29 @@ export default function SessionEnoughCard({ enough }: { enough: SessionEnough | 
 
       {longRunLine && <p className="mt-2 text-[12px] text-slate-500" title={L({ en: "Long run = 18 s or more without stopping (IMA Free Running). Match pace = 11 km/h or faster, the slowest tenth of the team's own match long runs.", is: "Langt hlaup = 18 sek eða lengur án þess að stoppa (IMA Free Running). Leikhraði = 11 km/klst eða hraðar, hægasti tíundi hluti langra hlaupa liðsins í leikjum." })}>{L(longRunLine)}</p>}
 
+      {/* Football Movement Profile — shown beside, never judged (grey bars, no target marker). */}
+      {enough.movementProfile && (
+        <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2">
+          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500" title={L({ en: "Catapult Football Movement Profile: the time the movement sensor classed as each type of movement, compared with the player's own match. No study gives a target per day-type for these, so they are shown, not judged.", is: "Catapult Football Movement Profile: tíminn sem hreyfiskynjarinn flokkaði í hverja tegund hreyfingar, borinn saman við eigin leik leikmanns. Engin rannsókn gefur markmið á dagsgerð fyrir þetta, svo það er sýnt en ekki metið." })}>
+            {L({ en: "Movement profile · shown, not judged", is: "Hreyfiprófíll · sýnt, ekki metið" })}
+          </div>
+          <div className="space-y-1.5">
+            {enough.movementProfile.bands.map((b) => (
+              <div key={b.key} className="grid grid-cols-[minmax(0,9.5rem)_1fr_auto] items-center gap-2 text-xs">
+                <span className="truncate text-slate-700" title={FMP_TECH[b.key]}>{L(FMP_LABEL[b.key])}</span>
+                <div className="relative h-2.5 rounded-full bg-slate-200/70">
+                  <div className="absolute inset-y-0 left-0 rounded-full bg-slate-400" style={{ width: `${b.pctOfMatch == null ? 0 : Math.min(100, b.pctOfMatch)}%` }} />
+                </div>
+                <span className="w-[8.5rem] text-right tabular-nums text-slate-600">
+                  {fmtDur(b.actualS)}{b.pctOfMatch != null && <> · {b.pctOfMatch}% <span className="text-slate-400">{L({ en: "of a match", is: "af leik" })}</span></>}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[10.5px] text-slate-400">{L({ en: `Minutes:seconds, median of ${enough.movementProfile.players} players with a full session. Full bar = as much as in a match.`, is: `Mínútur:sekúndur, miðgildi ${enough.movementProfile.players} leikmanna með fulla æfingu. Full stika = jafn mikið og í leik.` })}</p>
+        </div>
+      )}
+
       {/* (2) Behind the numbers */}
       <ShowDetails label={{ EN: "Show details — per player, week so far, how it's calculated", IS: "Sýna nánar — hver leikmaður, vikan, útreikningur" }}>
         <div className="overflow-x-auto">
@@ -225,6 +250,36 @@ export default function SessionEnoughCard({ enough }: { enough: SessionEnough | 
           <p className="mt-1 text-[10px] text-slate-400">{L({ en: "Each cell: session / the day's target for that player. Colour: green ≥85% of target, amber 60–84%, red <60%. Faded columns are not judged today. Long runs (count, at match pace, distance, strides) are never judged: in training most long runs are jogs.", is: "Hver reitur: æfing / markmið dagsins fyrir leikmanninn. Litur: grænn ≥85% af markmiði, gulur 60–84%, rauður <60%. Daufir dálkar eru ekki metnir í dag. Löng hlaup (fjöldi, á leikhraða, vegalengd, skref) eru aldrei metin: á æfingu eru flest löng hlaup skokk." })}</p>
         </div>
 
+        {enough.movementProfile && (
+          <div className="mt-4 overflow-x-auto">
+            <div className="mb-1 text-xs font-semibold text-slate-700">{L({ en: "Movement profile per player (shown, not judged)", is: "Hreyfiprófíll á leikmann (sýnt, ekki metið)" })}</div>
+            <table className="w-full text-xs">
+              <thead className="bg-slate-50 text-slate-600">
+                <tr>
+                  <th className="px-2 py-1 text-left">{L({ en: "Player", is: "Leikmaður" })}</th>
+                  {FMP_BANDS.map((b) => <th key={b} className="px-2 py-1 text-right" title={FMP_TECH[b]}>{L(FMP_LABEL[b])}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {shown.filter((p) => p.fmp).map((p) => (
+                  <tr key={p.playerId} className={`border-t border-slate-100 ${p.partial || p.recovering ? "opacity-60" : ""}`}>
+                    <td className="whitespace-nowrap px-2 py-1 font-medium text-slate-800">{p.name}</td>
+                    {FMP_BANDS.map((b) => {
+                      const c = p.fmp!.find((x) => x.key === b);
+                      return (
+                        <td key={b} className="whitespace-nowrap px-2 py-1 text-right tabular-nums text-slate-700">
+                          {fmtDur(c?.actualS ?? null)}<span className="text-[10px] text-slate-400"> · {c?.pctOfMatch == null ? "—" : `${c.pctOfMatch}%`}</span>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="mt-1 text-[10px] text-slate-400">{L({ en: "Each cell: time in the session (min:sec) · % of the player's own match. Faded rows: shortened session or recovering starter.", is: "Hver reitur: tími á æfingu (mín:sek) · % af eigin leik leikmanns. Daufar raðir: styttri æfing eða byrjunarliðsmaður í endurheimt." })}</p>
+          </div>
+        )}
+
         {enough.week && (
           <div className="mt-4">
             <div className="mb-1 text-xs font-semibold text-slate-700">{L({ en: `Week so far — ${enough.week.sessions} sessions since the match`, is: `Vikan hingað til — ${enough.week.sessions} æfingar frá leik` })}</div>
@@ -246,9 +301,13 @@ export default function SessionEnoughCard({ enough }: { enough: SessionEnough | 
         <div className="mt-4 rounded-lg bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-600">
           <div className="mb-1 font-semibold text-slate-700">{L({ en: "How this is calculated", is: "Hvernig þetta er reiknað" })}</div>
           <p>{L({
-            en: "Each player's match reference is the median of the player's own near-full matches (≥80 min, last ~11 weeks; the team's when there are fewer than 3). The planned day-type sets WHAT is judged: Mechanical = accelerations, braking, changes of direction; Locomotive = the number of long runs (continuous runs of 18 s or more); Mixed / Activation = accelerations, braking, changes of direction and the number of long runs; Top-up (MD+1) = starters (60+ min) recover, the rest are judged. The day-type also sets the target for accelerations, braking and changes of direction, the same standard the Meso calendar plans from: Mechanical 80% of a match, Mixed 60%, Top-up 55%, Locomotive 50%, Activation 38%. They sit within or near the ranges seen in studies of elite teams (Stevens 2017, Martín-García 2018); matching them to day-types is MicroPulse's choice, and the studies describe what those teams do rather than prove what is best; no study measures IMA change of direction directly, so it follows the same share. Long runs are sized by the MD-day, as is everything when no day-type is planned. The count comes from the inertial sensor and exists indoors. Distance and strides in long runs are shown but never judged: Catapult's top Free Running band now runs to 1000 s, so a warm-up jog of several minutes counts as a long run; that barely changes the count but added about a third to training-day distance and strides (matches under 1%). Enough = at least 85% of the target, roughly the low end of the published range. Partial sessions (<60% of the squad's duration) are shown but not judged. Running hotter than the day is a note, not a fail.",
-            is: "Leikviðmið hvers leikmanns er miðgildi hans eigin næstum-heilu leikja (≥80 mín, síðustu ~11 vikur; liðsins ef þeir eru færri en 3). Skipulögð dagsgerð ræður HVAÐ er metið: Mechanical = hröðun, hemlun, stefnubreytingar; Locomotive = fjöldi langra hlaupa (samfelld hlaup í 18 sek eða lengur); Mixed / Virkjun = hröðun, hemlun, stefnubreytingar og fjöldi langra hlaupa; Uppbót (MD+1) = byrjunarlið (60+ mín) í endurheimt, hinir metnir. Dagsgerðin ræður líka markmiðinu í hröðun, hemlun og stefnubreytingum, sami staðall og Meso-dagatalið notar: Mechanical 80% af leik, Mixed 60%, Uppbót 55%, Locomotive 50%, Virkjun 38%. Tölurnar liggja innan eða nálægt bilunum sem rannsóknir á úrvalsliðum sýna (Stevens 2017, Martín-García 2018); hvaða tala fylgir hvaða dagsgerð er val MicroPulse, og rannsóknirnar lýsa því hvað liðin gera en sanna ekki hvað er best; engin rannsókn mælir IMA-stefnubreytingar beint, svo þær fylgja sama hlutfalli. MD-dagurinn ræður stærð markmiðs í löngum hlaupum, og í öllu þegar engin dagsgerð er skipulögð. Fjöldinn kemur úr hreyfiskynjaranum og mælist innanhúss. Vegalengd og skref í löngum hlaupum eru sýnd en aldrei metin: efsta Free Running bandið hjá Catapult nær nú upp í 1000 sek, svo upphitunarskokk í nokkrar mínútur telst langt hlaup; það breytir fjöldanum varla en bætti um þriðjungi við vegalengd og skref á æfingadögum (leikir undir 1%). Nóg = a.m.k. 85% af markmiði, um það bil neðri mörk birta bilsins. Styttri æfingar (<60% af lengd hópsins) eru sýndar en ekki metnar. Meira en dagurinn kallar á er athugasemd, ekki fall.",
+            en: "Each player's match reference is the median of the player's own near-full matches (≥80 min, last ~11 weeks; the team's when there are fewer than 3). The planned day-type sets WHAT is judged: Mechanical = accelerations, braking, changes of direction; Locomotive = high-speed running and sprint distance (needs GPS), against about 45% of the player's own match; Mixed / Activation = accelerations, braking, changes of direction; Top-up (MD+1) = starters (60+ min) recover, the rest are judged. The day-type also sets the target for accelerations, braking and changes of direction, the same standard the Meso calendar plans from: Mechanical 80% of a match, Mixed 60%, Top-up 55%, Locomotive 50%, Activation 38%. They sit within or near the ranges seen in studies of elite teams (Stevens 2017, Martín-García 2018); matching them to day-types is MicroPulse's choice, and the studies describe what those teams do rather than prove what is best; no study measures IMA change of direction directly, so it follows the same share. Long runs (continuous runs of 18 s or more) are shown, never judged: in training most of them are jogs. Everything is sized by the MD-day when no day-type is planned. The long-run count comes from the inertial sensor and exists indoors. Distance and strides in long runs are shown but never judged: Catapult's top Free Running band now runs to 1000 s, so a warm-up jog of several minutes counts as a long run; that barely changes the count but added about a third to training-day distance and strides (matches under 1%). Enough = at least 85% of the target, roughly the low end of the published range. Partial sessions (<60% of the squad's duration) are shown but not judged. Running hotter than the day is a note, not a fail.",
+            is: "Leikviðmið hvers leikmanns er miðgildi hans eigin næstum-heilu leikja (≥80 mín, síðustu ~11 vikur; liðsins ef þeir eru færri en 3). Skipulögð dagsgerð ræður HVAÐ er metið: Mechanical = hröðun, hemlun, stefnubreytingar; Locomotive = háhraðahlaup og sprettvegalengd (þarf GPS), á móti um 45% af eigin leik leikmanns; Mixed / Virkjun = hröðun, hemlun, stefnubreytingar; Uppbót (MD+1) = byrjunarlið (60+ mín) í endurheimt, hinir metnir. Dagsgerðin ræður líka markmiðinu í hröðun, hemlun og stefnubreytingum, sami staðall og Meso-dagatalið notar: Mechanical 80% af leik, Mixed 60%, Uppbót 55%, Locomotive 50%, Virkjun 38%. Tölurnar liggja innan eða nálægt bilunum sem rannsóknir á úrvalsliðum sýna (Stevens 2017, Martín-García 2018); hvaða tala fylgir hvaða dagsgerð er val MicroPulse, og rannsóknirnar lýsa því hvað liðin gera en sanna ekki hvað er best; engin rannsókn mælir IMA-stefnubreytingar beint, svo þær fylgja sama hlutfalli. Löng hlaup (samfelld hlaup í 18 sek eða lengur) eru sýnd en aldrei metin: á æfingu eru flest þeirra skokk. MD-dagurinn ræður stærð markmiðs í öllu þegar engin dagsgerð er skipulögð. Fjöldi langra hlaupa kemur úr hreyfiskynjaranum og mælist innanhúss. Vegalengd og skref í löngum hlaupum eru sýnd en aldrei metin: efsta Free Running bandið hjá Catapult nær nú upp í 1000 sek, svo upphitunarskokk í nokkrar mínútur telst langt hlaup; það breytir fjöldanum varla en bætti um þriðjungi við vegalengd og skref á æfingadögum (leikir undir 1%). Nóg = a.m.k. 85% af markmiði, um það bil neðri mörk birta bilsins. Styttri æfingar (<60% af lengd hópsins) eru sýndar en ekki metnar. Meira en dagurinn kallar á er athugasemd, ekki fall.",
           })}</p>
+          {enough.movementProfile && <p className="mt-1.5">{L({
+            en: "Movement profile: Catapult's Football Movement Profile, the seconds the movement sensor classed as fast running in a line (Running High), sharp speed changes and turns (Dynamic High) and moderate ones (Dynamic Medium). It works indoors too. Each player's session is compared with the median of the player's own near-full matches (the team's when there are fewer than 3), the same matches as above. It is shown, never judged: no study gives a share of a match per day-type for these bands, so any target would be MicroPulse's own number.",
+            is: "Hreyfiprófíll: Football Movement Profile frá Catapult, sekúndurnar sem hreyfiskynjarinn flokkaði sem hratt hlaup í beinni línu (Running High), snarpar hraðabreytingar og stefnubreytingar (Dynamic High) og miðlungs (Dynamic Medium). Mælist líka innanhúss. Æfing hvers leikmanns er borin saman við miðgildi hans eigin næstum-heilu leikja (liðsins ef þeir eru færri en 3), sömu leikja og að ofan. Sýnt, aldrei metið: engin rannsókn gefur hlutfall af leik á dagsgerð fyrir þessi bönd, svo hvert markmið væri tala MicroPulse.",
+          })}</p>}
           <p className="mt-1.5 text-slate-500">{L({ en: "Sources: ", is: "Heimildir: " })}{enough.citations.join(" · ")}</p>
         </div>
       </ShowDetails>

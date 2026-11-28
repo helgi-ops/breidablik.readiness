@@ -11,6 +11,7 @@ import "server-only";
  *  - Day-type: Meso activation/top-up label → Week-setup pitch stimulus → Meso stimulus → MD+1 default
  *    (decides WHAT is judged, and sizes Acc/Dec/CoD from the calendar's standard).
  *  - Session: one effective row per player (manual overrides pod), previous-club rows excluded.
+ *  - Football Movement Profile (3 bands, seconds): read beside the verdict, same match reference rule, never judged.
  *
  * READ-ONLY / descriptive — never the readiness colour.
  */
@@ -25,9 +26,9 @@ import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
 import { selectNearFullMatches } from "@/lib/micropulse/periodization";
 import { oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
 import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
-import { durationMin, median, MIN_TRAIN_MIN, num, PARTIAL_SHARE, varsOf } from "./dayRows";
+import { durationMin, fmpOf, median, MIN_TRAIN_MIN, num, PARTIAL_SHARE, varsOf } from "./dayRows";
 import {
-  buildSessionEnough, emptyEnough, ENOUGH_VARS, dayTypeFromText, type EnoughDayType,
+  buildSessionEnough, emptyEnough, ENOUGH_VARS, FMP_BANDS, dayTypeFromText, type EnoughDayType, type FmpValues,
   type EnoughPlayerInput, type EnoughVar, type SessionEnough, type VarValues,
 } from "@/lib/micropulse/sessionEnough";
 
@@ -35,7 +36,7 @@ const DAY = 86_400_000;
 const LOOKBACK_DAYS = 200;      // match-reference window (selectNearFullMatches narrows to ~11 weeks)
 const OWN_REF_MIN = 3;          // fewer own near-full matches → use the team reference
 
-export const COLS = "player_id, date, source, ima_accel, ima_decel, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, total_distance, ima_fr_band58_total_distance, ima_fr_band_bounds, ima_fr_ge18_event_count, ima_fr_ge18_stride_count, ima_fr_ge18_mp_event_count, velocity_band5_total_distance, velocity_band6_total_distance, ima_fr_band5_event_count, ima_fr_band6_event_count, ima_fr_band7_event_count, ima_fr_band8_event_count, fmp_total_duration_s, total_player_load, player_load_per_minute, session_duration_minutes";
+export const COLS = "player_id, date, source, ima_accel, ima_decel, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, total_distance, ima_fr_band58_total_distance, ima_fr_band_bounds, ima_fr_ge18_event_count, ima_fr_ge18_stride_count, ima_fr_ge18_mp_event_count, velocity_band5_total_distance, velocity_band6_total_distance, ima_fr_band5_event_count, ima_fr_band6_event_count, ima_fr_band7_event_count, ima_fr_band8_event_count, fmp_total_duration_s, fmp_running_high_s, fmp_dynamic_high_s, fmp_dynamic_medium_s, total_player_load, player_load_per_minute, session_duration_minutes";
 
 export type Row = Record<string, unknown> & { player_id: string; date: string; source: string | null };
 
@@ -168,13 +169,13 @@ export async function loadSessionEnough(sb: SupabaseClient, teamId: string, sess
   ]);
 
   // Match reference — own near-full matches, else the team's.
-  type MRow = { date: string; minutes: number | null; v: VarValues };
+  type MRow = { date: string; minutes: number | null; v: VarValues; fmp: FmpValues };
   const matchByPlayer = new Map<string, MRow[]>();
   for (const r of matchRows) {
     const key = `${r.player_id}|${r.date}`;
     const minutes = minutesByKey.has(key) ? minutesByKey.get(key)! : (num(r.session_duration_minutes) ?? null);
     if (!matchByPlayer.has(r.player_id)) matchByPlayer.set(r.player_id, []);
-    matchByPlayer.get(r.player_id)!.push({ date: r.date, minutes, v: varsOf(r) });
+    matchByPlayer.get(r.player_id)!.push({ date: r.date, minutes, v: varsOf(r), fmp: fmpOf(r) });
   }
   const asOfMs = Date.parse(`${sessionDate}T00:00:00Z`);
   const ownSel = new Map<string, MRow[]>();
@@ -190,6 +191,13 @@ export async function loadSessionEnough(sb: SupabaseClient, teamId: string, sess
     return o;
   };
   const teamRef = medOf(teamPool);
+  // Movement profile reference: same matches, same "a 0 in a near-full match is a missing reading" rule.
+  const fmpMedOf = (rows: MRow[]): FmpValues => {
+    const o = {} as FmpValues;
+    for (const b of FMP_BANDS) o[b] = median(rows.map((r) => r.fmp[b]).filter((x): x is number => x != null && x > 0));
+    return o;
+  };
+  const teamFmpRef = fmpMedOf(teamPool);
 
   // ── Session rows → per-player input ─────────────────────────────────────────
   const sessionRows = blockRows.filter((r) => r.date === sessionDate);
@@ -221,6 +229,9 @@ export async function loadSessionEnough(sb: SupabaseClient, teamId: string, sess
     const ownMed = useOwn ? medOf(own) : null;
     const ref = {} as VarValues;
     for (const k of ENOUGH_VARS) ref[k] = ownMed?.[k] ?? teamRef[k];
+    const ownFmp = useOwn ? fmpMedOf(own) : null;
+    const fmpRef = {} as FmpValues;
+    for (const b of FMP_BANDS) fmpRef[b] = ownFmp?.[b] ?? teamFmpRef[b];
     let weekActual: VarValues | null = null;
     if (weekDays) {
       const mine = blockRows.filter((b) => b.player_id === r.player_id && weekDates.includes(b.date)).map(varsOf);
@@ -244,6 +255,7 @@ export async function loadSessionEnough(sb: SupabaseClient, teamId: string, sess
       actual: varsOf(r), matchRef: ref, refSource: useOwn ? "own" : "team", refMatches: own.length,
       partial: medDur != null && d > 0 && d < PARTIAL_SHARE * medDur,
       weekActual,
+      fmp: { actual: fmpOf(r), matchRef: fmpRef },
     };
   });
 

@@ -7,7 +7,7 @@
 import { Text, View } from "@react-pdf/renderer";
 import { BrandPage, Bullets, Provenance, Section, Status, Table, Verdict, FactRow, fb, type Col, type Tone } from "@/components/pdf/brand";
 import type { PvaStatus } from "@/lib/micropulse/loadPlan/plannedVsActual";
-import { DAY_TYPE_LABEL, ENOUGH_LABEL, ENOUGH_VARS, isContextOnly, type PlayerVerdict, type SessionEnough, type TeamVerdict } from "@/lib/micropulse/sessionEnough";
+import { DAY_TYPE_LABEL, ENOUGH_LABEL, ENOUGH_VARS, FMP_BANDS, FMP_LABEL, isContextOnly, type PlayerVerdict, type SessionEnough, type TeamVerdict } from "@/lib/micropulse/sessionEnough";
 
 const VERDICT_TONE: Record<TeamVerdict, Tone> = { yes: "green", mostly: "amber", no: "red" };
 const VERDICT_LABEL: Record<TeamVerdict, string> = { yes: "Enough", mostly: "Mostly", no: "Not enough" };
@@ -17,6 +17,8 @@ const PLAYER: Record<PlayerVerdict, { text: string; tone: Tone }> = {
   partial_session: { text: "shortened", tone: "neutral" }, recovery: { text: "recovering", tone: "neutral" }, no_data: { text: "no data", tone: "neutral" },
 };
 const fmt = (n: number | null) => (n == null ? "-" : Math.round(n).toLocaleString("en-US"));
+/** Seconds → m:ss (Football Movement Profile time). */
+const fmtDur = (s: number | null) => (s == null ? "-" : `${Math.floor(Math.round(s) / 60)}:${String(Math.round(s) % 60).padStart(2, "0")}`);
 
 export function SessionEnoughPdfPage({ enough, teamName, sessionDate }: { enough: SessionEnough | null | undefined; teamName: string; sessionDate: string }) {
   if (!enough || (enough.state !== "ok" && enough.state !== "no_md")) return null;
@@ -88,6 +90,37 @@ export function SessionEnoughPdfPage({ enough, teamName, sessionDate }: { enough
         <Table cols={cols} rows={rows} size={8} dense />
       </Section>
 
+      {enough.movementProfile ? (
+        <>
+          {/* Heading + squad facts stay together (wrap false, small); the per-player table below may break across pages. */}
+          <Section wrap={false} title="Movement profile (shown, not judged)" hint={`Catapult Football Movement Profile · time in the session vs the player's own match · squad = median of ${enough.movementProfile.players} players with a full session · each cell: min:sec · % of a match`}>
+            <FactRow
+              facts={enough.movementProfile.bands.map((b) => ({
+                value: b.pctOfMatch == null ? "-" : `${b.pctOfMatch}%`,
+                label: `${FMP_LABEL[b.key].en} (of a match)`,
+                sub: `${fmtDur(b.actualS)} in the session · ${fmtDur(b.matchS)} in a match`,
+              }))}
+            />
+          </Section>
+          <Section mt={0}>
+            <View style={{ width: "70%" }}>
+              <Table
+                cols={[{ label: "Player", flex: 1.4 }, ...FMP_BANDS.map((b): Col => ({ label: FMP_LABEL[b].en, flex: 1, align: "right" }))]}
+                rows={players.filter((p) => p.fmp).map((p) => [
+                  p.name,
+                  ...FMP_BANDS.map((b) => {
+                    const c = p.fmp!.find((x) => x.key === b);
+                    return `${fmtDur(c?.actualS ?? null)} · ${c?.pctOfMatch == null ? "-" : `${c.pctOfMatch}%`}`;
+                  }),
+                ])}
+                size={8}
+                dense
+              />
+            </View>
+          </Section>
+        </>
+      ) : null}
+
       {enough.week ? (
         <Section title={`Week so far - ${enough.week.sessions} sessions since the match`}>
           <View style={{ width: "62%" }}>
@@ -108,7 +141,7 @@ export function SessionEnoughPdfPage({ enough, teamName, sessionDate }: { enough
       ) : null}
 
       <Provenance>
-        {`How it's calculated: each player's match reference = median of the player's own near-full matches (≥80 min, last ~11 weeks; the team's when fewer than 3). The planned day-type decides what is judged: Mechanical, Mixed, Activation = accelerations, braking, CoD; Locomotive = high-speed running and sprint distance (GPS); Top-up = starters (60+ min) recover, the rest are judged. It also sets the target, the same standards the Meso calendar and Week plan plan from: accelerations, braking and CoD Mechanical 80% of a match, Mixed 60%, Top-up 55%, Locomotive 50%, Activation 38%; high-speed running and sprint on a Locomotive day 45% of his own match (studies of elite teams describe this, they don't prove it best; CoD follows the same share). Everything with no planned day-type is sized by the MD-day. Enough = ≥85% of target. Long runs (18 s or more without stopping, IMA Free Running) are shown, never judged: their count, how many were at match pace (11 km/h or faster), distance and strides. In training most long runs are jogs. Sources: ${enough.citations.join("; ")}.`}
+        {`How it's calculated: each player's match reference = median of the player's own near-full matches (≥80 min, last ~11 weeks; the team's when fewer than 3). The planned day-type decides what is judged: Mechanical, Mixed, Activation = accelerations, braking, CoD; Locomotive = high-speed running and sprint distance (GPS); Top-up = starters (60+ min) recover, the rest are judged. It also sets the target, the same standards the Meso calendar and Week plan plan from: accelerations, braking and CoD Mechanical 80% of a match, Mixed 60%, Top-up 55%, Locomotive 50%, Activation 38%; high-speed running and sprint on a Locomotive day 45% of his own match (studies of elite teams describe this, they don't prove it best; CoD follows the same share). Everything with no planned day-type is sized by the MD-day. Enough = ≥85% of target. Long runs (18 s or more without stopping, IMA Free Running) are shown, never judged: their count, how many were at match pace (11 km/h or faster), distance and strides. In training most long runs are jogs.${enough.movementProfile ? " Movement profile (Catapult Football Movement Profile: Running High, Dynamic High, Dynamic Medium seconds, inertial) is shown against the player's own near-full matches, never judged: no study gives a share of a match per day-type for these bands." : ""} Sources: ${enough.citations.join("; ")}.`}
       </Provenance>
     </BrandPage>
   );

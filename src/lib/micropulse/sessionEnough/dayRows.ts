@@ -7,7 +7,7 @@
 import { hasNoGpsReading } from "@/lib/micropulse/periodization";
 import { imaCodTotal } from "@/lib/micropulse/catapultCapability";
 import { hasGpsReading, longRunsOf } from "@/lib/micropulse/longRuns";
-import type { VarValues } from "./index";
+import type { FmpValues, VarValues } from "./index";
 import { MIN_SESSION_PLAYERS, WEEK_KEYS, type ActualDay, type WeekKey } from "./weekEnough";
 
 export const MIN_TRAIN_MIN = 20;       // shorter rows are not a training session
@@ -42,6 +42,20 @@ export function varsOf(r: Record<string, unknown>): VarValues {
     // (≥21 s) before the band edges changed on 9 Nov 2026 — the new config has no 21 s edge.
     strideHi: num(r.ima_fr_ge18_stride_count),
     longRuns: longRunsOf(r).bouts,
+  };
+}
+
+/**
+ * Football Movement Profile seconds from one row (Catapult, inertial, so it exists indoors). No FMP reading on the row
+ * (total FMP duration missing or 0) = null in every band; with a reading, 0 s in a band is a real 0. Shown beside the
+ * verdict, never judged.
+ */
+export function fmpOf(r: Record<string, unknown>): FmpValues {
+  const ok = (num(r.fmp_total_duration_s) ?? 0) > 0;
+  return {
+    runHigh: ok ? num(r.fmp_running_high_s) : null,
+    dynHigh: ok ? num(r.fmp_dynamic_high_s) : null,
+    dynMed: ok ? num(r.fmp_dynamic_medium_s) : null,
   };
 }
 

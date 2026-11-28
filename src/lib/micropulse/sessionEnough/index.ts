@@ -116,6 +116,41 @@ export const ENOUGH_CITATIONS = [
   "Training:match ratios — PMC6747517",
 ];
 
+/**
+ * Football Movement Profile (Catapult, inertial — it exists indoors): seconds the sensor classed as each movement
+ * type. Shown beside the verdict, NEVER judged, and kept out of ENOUGH_VARS on purpose (that list drives targets,
+ * the week-so-far line and what counts as a session). No study gives a share of a match per day-type for these
+ * bands, so there is nothing honest to judge against; the coach sees time and % of the player's own match.
+ * The same three bands Train like you Play reads (fmp_run_high / fmp_dyn_high / fmp_dyn_med). Coach asked 2026-11-28.
+ */
+export const FMP_BANDS = ["runHigh", "dynHigh", "dynMed"] as const;
+export type FmpBand = (typeof FMP_BANDS)[number];
+export type FmpValues = Record<FmpBand, number | null>;
+export const FMP_LABEL: Record<FmpBand, Bi> = {
+  runHigh: { en: "Fast running in a line", is: "Hratt hlaup í beinni línu" },
+  dynHigh: { en: "Sharp speed changes and turns", is: "Snarpar hraðabreytingar og stefnubreytingar" },
+  dynMed: { en: "Moderate speed changes and turns", is: "Miðlungs hraðabreytingar og stefnubreytingar" },
+};
+export const FMP_TECH: Record<FmpBand, string> = {
+  runHigh: "Catapult Football Movement Profile — Running High (seconds): running and sprinting in a line",
+  dynHigh: "Catapult Football Movement Profile — Dynamic High (seconds): sharp changes of direction, accelerations, braking",
+  dynMed: "Catapult Football Movement Profile — Dynamic Medium (seconds): moderate changes of direction, accelerations, braking",
+};
+/** Fewer players with the bands than this = no movement-profile block (a median of one or two says little). */
+export const MIN_FMP_PLAYERS = 3;
+export const FMP_SOURCE = "Catapult Football Movement Profile — the vendor's movement classification (shown, not judged)";
+
+export type FmpCompare = { key: FmpBand; actualS: number | null; matchS: number | null; pctOfMatch: number | null };
+/** Squad medians of the players in the team pool who have the bands. */
+export type MovementProfile = { bands: FmpCompare[]; players: number };
+
+const compareFmp = (key: FmpBand, actual: number | null, match: number | null): FmpCompare => ({
+  key,
+  actualS: actual == null ? null : Math.round(actual),
+  matchS: match == null ? null : Math.round(match),
+  pctOfMatch: actual != null && match != null && match > 0 ? Math.round((actual / match) * 100) : null,
+});
+
 /** The share of a match a session on this MD-day should deliver for one variable (0–1). */
 export function dayShare(key: EnoughVar, matchPct: number): number {
   const f = Math.max(0, Math.min(1.2, matchPct / 100));
@@ -194,6 +229,8 @@ export type EnoughPlayerInput = {
   weekActual?: VarValues | null;
   /** Minutes in the most recent match (top-up days: >= STARTER_MINUTES = recovering, not judged). */
   lastMatchMinutes?: number | null;
+  /** Football Movement Profile seconds: this session and the player's match reference. Shown, never judged. */
+  fmp?: { actual: FmpValues; matchRef: FmpValues } | null;
 };
 
 export type EnoughInput = {
@@ -234,6 +271,8 @@ export type PlayerEnough = {
   refSource: "own" | "team"; refMatches: number; partial: boolean;
   /** Top-up day: played >= STARTER_MINUTES in the last match, so recovering and not judged. */
   recovering: boolean; lastMatchMinutes: number | null;
+  /** Football Movement Profile vs the player's own match (null = no FMP reading). Shown, never judged. */
+  fmp?: FmpCompare[] | null;
 };
 
 export type TeamVerdict = "yes" | "mostly" | "no";
@@ -261,6 +300,8 @@ export type SessionEnough = {
   week: { sessions: number; vars: WeekVar[] } | null;
   confidence: { level: "high" | "moderate" | "low"; judged: number; squad: number; ownRef: number; mdSource: "week_setup" | "fixtures" | null; note: Bi };
   citations: string[];
+  /** Football Movement Profile beside the verdict (null = too few players with the bands). Never judged. */
+  movementProfile?: MovementProfile | null;
 };
 
 const isShort = (s: PvaStatus) => s === "under" || s === "well_under";
@@ -320,8 +361,23 @@ export function emptyEnough(state: Exclude<EnoughState, "ok">, opts?: { sessionD
     dayType: null, dayTypeSource: null, focusNote: null, verdict: null,
     headline: state === "no_md" ? { en: "Not judged — no match context for this day.", is: "Ekki metið — ekkert leikjasamhengi fyrir þennan dag." } : H[state],
     facts: [], counterfactual: null, overNote: null, team: [], players: [], week: null,
-    confidence: EMPTY_CONF(opts?.squad ?? 0), citations: ENOUGH_CITATIONS,
+    confidence: EMPTY_CONF(opts?.squad ?? 0), citations: ENOUGH_CITATIONS, movementProfile: null,
   };
+}
+
+/**
+ * The squad's Football Movement Profile for the session: medians over the same pool as the team bars (full sessions,
+ * not recovering starters), players with at least one band against a match only. Null under MIN_FMP_PLAYERS. Pure.
+ */
+function movementProfileOf(pool: PlayerEnough[]): MovementProfile | null {
+  const withFmp = pool.filter((p) => p.fmp?.some((b) => b.pctOfMatch != null));
+  if (withFmp.length < MIN_FMP_PLAYERS) return null;
+  const bands = FMP_BANDS.map((key) => {
+    const pick = (sel: (c: FmpCompare) => number | null) =>
+      median(withFmp.map((p) => { const c = p.fmp!.find((b) => b.key === key); return c ? sel(c) : null; }).filter((x): x is number => x != null));
+    return { key, actualS: r0(pick((c) => c.actualS)), matchS: r0(pick((c) => c.matchS)), pctOfMatch: r0(pick((c) => c.pctOfMatch)) };
+  });
+  return bands.some((b) => b.pctOfMatch != null) ? { bands, players: withFmp.length } : null;
 }
 
 export function buildSessionEnough(input: EnoughInput): SessionEnough {
@@ -350,7 +406,11 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
     const v = verdictOf(statuses, minJudged);
     const shortOn = ENOUGH_VARS.filter((k) => focusSet.has(k) && isShort(byVar[k].status));
     const verdict: PlayerVerdict = p.partial ? "partial_session" : recovering ? "recovery" : v ?? "no_data";
-    return { playerId: p.playerId, name: p.name.trim(), verdict, byVar, shortOn, refSource: p.refSource, refMatches: p.refMatches, partial: p.partial, recovering, lastMatchMinutes: p.lastMatchMinutes ?? null };
+    // Movement profile: shown beside, never part of the verdict above.
+    const fmp = p.fmp && FMP_BANDS.some((b) => p.fmp!.actual[b] != null)
+      ? FMP_BANDS.map((b) => compareFmp(b, p.fmp!.actual[b], p.fmp!.matchRef[b]))
+      : null;
+    return { playerId: p.playerId, name: p.name.trim(), verdict, byVar, shortOn, refSource: p.refSource, refMatches: p.refMatches, partial: p.partial, recovering, lastMatchMinutes: p.lastMatchMinutes ?? null, fmp };
   });
   const judged = players.filter((p) => !p.partial && !p.recovering && p.verdict !== "no_data");
   const recoveringN = players.filter((p) => p.recovering).length;
@@ -382,6 +442,8 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
     const t = matchPct == null ? null : targetShare(k, matchPct, dayType);
     return { key: k, actual: r0(pick((c) => c.actual)), matchRef: r0(pick((c) => c.matchRef)), dayTarget: r0(pick((c) => c.dayTarget)), pctOfMatch: r0(pick((c) => c.pctOfMatch)), pctOfTarget: r0(pctT), targetPct: t ? Math.round(t.share * 100) : null, basis: t?.basis ?? "md", status, focus: focusSet.has(k) };
   });
+  const movementProfile = movementProfileOf(pool);
+  const citations = movementProfile ? [...ENOUGH_CITATIONS, FMP_SOURCE] : ENOUGH_CITATIONS;
 
   // ── Confidence ──────────────────────────────────────────────────────────────
   const squad = Math.max(input.squadSize, players.length);
@@ -411,7 +473,7 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
     const lo = pm.length ? Math.min(...pm) : null, hi = pm.length ? Math.max(...pm) : null;
     return {
       ...emptyEnough("no_md", { sessionDate, mdLabel: null, squad }),
-      team, players, confidence, dayType, dayTypeSource: input.dayTypeSource ?? null, focusNote,
+      team, players, confidence, dayType, dayTypeSource: input.dayTypeSource ?? null, focusNote, movementProfile, citations,
       facts: lo != null ? [{
         en: `The session gave ${lo}–${hi}% of a match across the ${pm.length} movement types.`,
         is: `Æfingin gaf ${lo}–${hi}% af leik yfir hreyfiþættina ${pm.length}.`,
@@ -425,7 +487,7 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
   // ── Team verdict ────────────────────────────────────────────────────────────
   const tv = verdictOf(team.filter((t) => t.focus).map((t) => t.status), minJudged);
   if (!tv) {
-    const out = { ...emptyEnough("no_reference", { sessionDate, mdLabel, squad }), team, players, confidence, dayType, dayTypeSource: input.dayTypeSource ?? null, focusNote };
+    const out = { ...emptyEnough("no_reference", { sessionDate, mdLabel, squad }), team, players, confidence, dayType, dayTypeSource: input.dayTypeSource ?? null, focusNote, movementProfile, citations };
     // Locomotive with no GPS (indoors): HSR / sprint can't be read, which is not the same as "no match data".
     const noGps = dayType === "locomotive" && team.filter((t) => t.focus).every((t) => t.actual == null);
     return noGps ? { ...out, headline: {
@@ -519,7 +581,7 @@ export function buildSessionEnough(input: EnoughInput): SessionEnough {
 
   return {
     state: "ok", sessionDate, mdLabel, matchPct, dayType, dayTypeSource: input.dayTypeSource ?? null, focusNote, verdict, headline,
-    facts: facts.slice(0, 3), counterfactual, overNote, team, players, week, confidence, citations: ENOUGH_CITATIONS,
+    facts: facts.slice(0, 3), counterfactual, overNote, team, players, week, confidence, citations, movementProfile,
   };
 }
 
